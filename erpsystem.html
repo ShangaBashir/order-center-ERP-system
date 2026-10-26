@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ku" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,11 +13,65 @@
       theme: {
         extend: {
           fontFamily: {
-            nrt: ['"NRT Reg"', '"Noto Sans Arabic"', 'Segoe UI', 'Tahoma', 'sans-serif'],
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'Segoe UI', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#FDF2F2',
+              100: '#FDE4E4',
+              200: '#F8C8C6',
+              300: '#EE9F9C',
+              400: '#DC6460',
+              500: '#B82E29',
+              600: '#94201C',
+              700: '#7B1815',
+              800: '#711612',
+              900: '#520D0A',
+              950: '#340604',
+            },
+            accent: {
+              50: '#FDF9F2',
+              100: '#FAF1DE',
+              200: '#F4E0BB',
+              300: '#ECCB8F',
+              400: '#E0B25E',
+              500: '#C9933B',
+              600: '#AB7431',
+              700: '#8A5825',
+              800: '#704522',
+              900: '#5C391E',
+              950: '#351F0E',
+            },
+            indigo: {
+              50: '#FDF2F2',
+              100: '#FDE4E4',
+              200: '#F8C8C6',
+              300: '#EE9F9C',
+              400: '#DC6460',
+              500: '#B82E29',
+              600: '#7B1815',
+              700: '#711612',
+              800: '#520D0A',
+              900: '#340604',
+              950: '#220302',
+            },
+            purple: {
+              50: '#FDF9F2',
+              100: '#FAF1DE',
+              200: '#F4E0BB',
+              300: '#ECCB8F',
+              400: '#E0B25E',
+              500: '#C9933B',
+              600: '#AB7431',
+              700: '#8A5825',
+              800: '#704522',
+              900: '#5C391E',
+              950: '#351F0E',
+            }
           }
         }
       }
-    }
+    };
   </script>
 
   <!-- React 18 & ReactDOM & Babel for in-browser JSX parsing -->
@@ -28,64 +82,32 @@
   <!-- Lucide Icons standalone script -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- NRT Kurdish Font Webfont -->
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.cdnfonts.com/css/nrt-reg');
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
     .font-nrt {
-      font-family: 'NRT Reg', 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif !important;
+      font-family: 'Plus Jakarta Sans', sans-serif !important;
     }
-    /* Hide scrollbar for tabs navigation */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-
-    /* Professional A4 Print Stylesheet */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     @media print {
-      @page {
-        size: A4 portrait;
-        margin: 12mm 10mm 15mm 10mm;
-      }
-      body {
-        background-color: #ffffff !important;
-        color: #0f172a !important;
-        font-size: 11pt !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      /* Hide all web-only app chrome */
-      header, footer, .no-print, button, input, select, .modal-overlay, #toast-container {
-        display: none !important;
-      }
-      /* Show the dedicated print document */
-      .print-only-statement {
-        display: block !important;
-      }
-      /* Prevent ugly row splitting across pages */
-      tr, .print-card {
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-      }
-      table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-      }
-      th, td {
-        border-bottom: 1px solid #cbd5e1 !important;
-        padding: 6px 8px !important;
-      }
+      @page { size: A4 portrait; margin: 12mm 10mm 15mm 10mm; }
+      body { background-color: #ffffff !important; color: #0f172a !important; font-size: 11pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      header, footer, .no-print, button, input, select, .modal-overlay, #toast-container { display: none !important; }
+      .print-only-statement { display: block !important; }
+      tr, .print-card { page-break-inside: avoid !important; break-inside: avoid !important; }
+      table { width: 100% !important; border-collapse: collapse !important; }
+      th, td { border-bottom: 1px solid #cbd5e1 !important; padding: 6px 8px !important; }
     }
-    @media screen {
-      .print-only-statement {
-        display: none;
-      }
-    }
+    @media screen { .print-only-statement { display: none; } }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+<body class="bg-slate-50 text-slate-900 antialiased selection:bg-[#711612] selection:text-white">
 
   <!-- Root mount node -->
   <div id="root"></div>
@@ -232,127 +254,6 @@
         deleteModalMessage: 'Are you sure you want to delete this transaction record? This action cannot be undone.',
         deleteConfirm: 'Delete',
         footerText: 'Order Center ERP • Corporate Financial Operations Platform • Sulaymaniyah & Erbil'
-      },
-      ku: {
-        appTitle: 'ئۆردەر سەنتەر ERP',
-        appBadge: 'وەشانی دارایی ٢.٤',
-        appSubtitle: 'بەڕێوەبردنی ٥ سەرچاوەی نەختینە، تۆماری گشتی و پشکی هاوبەشەکان',
-        quickTransfer: 'گواستنەوەی خێرا',
-        partnerSettlement: 'پاکتاوی هاوبەشەکان',
-        newTransaction: 'تۆمارکردنی نوێ',
-        tabDashboard: 'تێڕوانینی گشتی',
-        tabTransactions: 'تۆماری جووڵەکان',
-        tabPartners: 'هاوبەشەکان و پشک',
-        tabAnalytics: 'شیکاری دارایی',
-        tabSettings: 'ڕێکخستن و سەرمایەی سەرەتایی',
-        settingsTitle: 'ڕێکخستن و دیاریکردنی باڵانسی ئێستای هەژمارەکان',
-        settingsSub: 'بڕی ئەو پارەیەی ئێستا لە هەر یەک لە ٥ هەژمارەکەدا هەتە لێرە بنووسە بۆ ئەوەی حسابی نوێ لە ئێستاوە دەست پێبکات.',
-        openingBalancesTitle: 'باڵانسی سەرەتایی هەژمارەکان (سەرمایەی سەرەتا)',
-        openingBalancesDesc: 'ئێستا چەندت هەیە لە هەر هەژمارێکدا؟ بینوسە تاوەکو هەموو جووڵە نوێیەکان لەسەر ئەم بڕە هەژمار بکرێن.',
-        saveSettings: 'پاشەکەوتکردنی ڕێکخستن و باڵانسەکان',
-        dangerZone: 'بەڕێوەبردن و سڕینەوەی داتاکان',
-        dangerZoneDesc: 'سڕینەوەی هەموو تۆمارەکان یان سفرکردنەوەی تەواوەتی سیستەم.',
-        clearAllTxBtn: 'سڕینەوەی تەواوی جووڵەکان (Transactions)',
-        resetEverythingBtn: 'سفرکردنەوەی گشتی (باڵانسەکان و هەموو جووڵەکان = ٠)',
-        usdRateLabel: 'نرخی ١ دۆلار بە دیناری عێراقی',
-        totalLiquidity: 'کۆی گشتی هەموو پارەکان (نەختینەی گشتی)',
-        totalRevenue: 'کۆی داهات',
-        totalExpenses: 'کۆی خەرجییەکان',
-        netProfit: 'قازانجی پوخت',
-        exchangeRateNote: '١ دۆلار ≈',
-        heroDescription: 'کۆی گشتی پارەی بەردەست لە سەرجەم ٥ هەژمارەکەدا (FIB، بانکی جیهان، کیو کارت، هایپەر پۆست، و سندوقی کاش).',
-        partnerDrawingsTitle: 'ڕاکێشانی هاوبەشەکان و پشک',
-        partnerDrawingsSub: 'چاودێری پشکی سەروەر و واژام',
-        ledgerBtn: 'تۆمار',
-        totalDrawingsToDate: 'کۆی ڕاکێشراو تا ئێستا:',
-        netRetainedInBiz: 'ماوە لە سەرمایەی کارەکەدا:',
-        walletsSectionTitle: 'سەرچاوە و هەژمارە سەرەکییەکان (٥ سەرچاوە)',
-        walletsSectionSub: 'باڵانسی ڕاستەوخۆ بەپێی کەنالەکانی وەرگرتن و دان',
-        transferBetweenAccounts: 'گواستنەوە لە نێوان هەژمارەکان',
-        percentOfTotal: 'لە کۆی گشتی',
-        viewLedger: 'بینینی جووڵەکان ←',
-        recentTransactions: 'دوایین جووڵە تۆمارکراوەکان',
-        recentTransactionsSub: 'نوێترین هاتن و چوونە داراییەکان',
-        viewAll: 'بینینی هەمووی',
-        searchPlaceholder: 'گەڕان بەپێی تێبینی، ژمارەی پسوولە، یان پۆلێن...',
-        exportCsv: 'داگرتنی CSV',
-        addEntry: 'تۆمارکردن',
-        accountFilter: 'فلتەری هەژمار',
-        allAccounts: 'هەموو هەژمارەکان (گشتی)',
-        txTypeFilter: 'جۆری جووڵە',
-        allTypes: 'هەموو جۆرەکان',
-        partnerFilter: 'هاوبەش / تۆمارکەر',
-        allPartners: 'هەردوو هاوبەش',
-        datePeriod: 'ماوەی بەروار',
-        allTime: 'هەموو کات',
-        today: 'ئەمڕۆ',
-        past7Days: '٧ ڕۆژی ڕابردوو',
-        thisMonth: 'ئەم مانگە',
-        resetFilters: 'پاککردنەوەی فلتەر',
-        masterLedger: 'تۆماری گشتی جووڵە داراییەکان (Ledger)',
-        displayingRecords: 'پیشاندانی تۆمارە دۆزراوەکان',
-        reloadSample: 'سڕینەوەی هەموو تۆمارەکان',
-        noRecords: 'هیچ جووڵەیەکی دارایی تۆمار نەکراوە',
-        noRecordsSub: 'تۆمار بەتاڵ و خاوێنە. دەست بنێ بە دوگمەی "تۆمارکردنی نوێ" بۆ زیادکردنی یەکەم داهات، خەرجی یان گواستنەوە.',
-        colRefDate: 'ژمارەی پسوولە و بەروار',
-        colType: 'جۆر',
-        colAmount: 'بڕی پارە',
-        colAccountFlow: 'هەژمار / ئاراستە',
-        colCategory: 'هۆکار و پۆلێن',
-        colPartner: 'هاوبەش',
-        colNotes: 'تێبینی و وردەکاری',
-        colActions: 'کردارەکان',
-        typeIncome: 'داهات (+)',
-        typeExpense: 'خەرجی (-)',
-        typeTransfer: 'گواستنەوە (⇄)',
-        typeWithdrawal: 'ڕاکێشانی کەسی (👤)',
-        partnersHeaderTitle: 'تۆماری پاکتاو و سەرمایەی هاوبەشەکان',
-        partnersHeaderSub: 'دابەشکردنی قازانجی پوخت، لێدەرکردنی ڕاکێشانە شەخسییەکان، و دیاریکردنی حەقی ماوەی نێوان سەروەر و واژام.',
-        configureSimulate: 'ڕێکخستنی ڕێژە و هاوکێشە',
-        agreedSplit: 'ڕێژەی ڕێککەوتوو',
-        entitledShare: 'پشکی بەردەکەوێت:',
-        totalWithdrawn: 'کۆی ڕاکێشراو (وەرگیراو):',
-        netDueTo: 'ماوە بۆ',
-        logDrawing: 'تۆماری ڕاکێشان',
-        auditLogTitle: 'تۆماری وردی ڕاکێشانی هاوبەشەکان',
-        auditLogSub: 'هەموو پارەیەکی کەسی کە لە هەژمارەکان دەرهێنراوە',
-        noWithdrawals: 'هیچ ڕاکێشانێکی هاوبەشەکان تۆمار نەکراوە.',
-        liquidityDistTitle: 'دابەشبوونی پارە بەسەر ٥ هەژمارەکەدا',
-        liquidityDistSub: 'ڕێژەی سەدی پارەی بەردەست لە هەر سەرچاوەیەکدا',
-        revenueByCategory: 'داهات بەپێی پۆلێن',
-        expensesByCategory: 'خەرجی بەپێی پۆلێن',
-        share: 'پشک',
-        recordModalTitleNew: 'تۆمارکردنی جووڵەی دارایی',
-        recordModalTitleEdit: 'دەستکاریکردنی تۆماری دارایی',
-        recordModalSub: 'وردەکاری پارە، هەژمار و تێبینی هۆکار بنووسە',
-        txClassification: 'جۆری جووڵەی دارایی',
-        amountCurrency: 'بڕی پارە و دراو *',
-        accountTarget: 'هەژمار / سەرچاوەی پارە',
-        sourceAccount: 'لە هەژماری (سەرچاوە)',
-        destAccount: 'بۆ هەژماری (مەبەست)',
-        associatedPartner: 'تۆمارکراوە لەلایەن / پەیوەندیدار بە',
-        accountingCategory: 'پۆلێن و هۆکار',
-        refInvoiceNum: 'ژمارەی پسوولە / ئۆردەر (Ref #)',
-        reasonMemo: 'هۆکار و تێبینی ورد *',
-        memoPlaceholder: 'ناوی بازرگان/کڕیار، شوێنی گەیاندن، هۆکاری خەرجکردن، یان تێبینی تایبەت...',
-        dateTimeMovement: 'بەروار و کاتی جووڵە',
-        cancel: 'پەشیمانبوونەوە',
-        postToLedger: 'تۆمارکردن لە دەفتەر',
-        updateEntry: 'نوێکردنەوەی تۆمار',
-        quickTransferTitle: 'گواستنەوەی دەستبەجێی نێوان هەژمارەکان',
-        quickTransferSub: 'گواستنەوەی ئاسانی پارە لە نێوان ٥ خەزێنەکەدا',
-        transferAmount: 'بڕی پارەی گواستنەوە',
-        authorizingPartner: 'هاوبەشی بڕیاردەر',
-        transferNote: 'تێبینی گواستنەوە',
-        executeTransfer: 'جێبەجێکردنی گواستنەوە',
-        settlementTitle: 'سیستمی پاکتاوکردن و هەژمارکردنی پشکی هاوبەشەکان',
-        settlementSub: 'هێڵەکە ڕابکێشە بۆ تاقیکردنەوەی ڕێژەی تر. بنەڕەت ٥٠/٥٠یە.',
-        netLiquidationOwed: 'بڕی پارەی ماوە بۆ پاکتاو',
-        closeSimulator: 'داخستن',
-        deleteModalTitle: 'سڕینەوەی تۆمار',
-        deleteModalMessage: 'ئایا دڵنیایت لە سڕینەوەی ئەم جووڵە داراییە؟ ئەم کردارە ناگەڕێتەوە.',
-        deleteConfirm: 'سڕینەوە',
-        footerText: 'ئۆردەر سەنتەر ERP • سیستمی بەڕێوەبردنی خەزێنە و دارایی • سلێمانی و هەولێر'
       }
     };
 
@@ -365,9 +266,9 @@
         nameKu: 'بانکی یەکەمی عێراقی (FIB)',
         shortNameKu: 'FIB',
         iconName: 'building-2',
-        gradient: 'from-blue-600 to-indigo-750',
-        colorHex: '#3b82f6',
-        badge: 'bg-blue-100 text-blue-800 border-blue-200'
+        gradient: 'from-[#711612] to-[#8C1E1A]',
+        colorHex: '#711612',
+        badge: 'bg-[#FDF2F2] text-[#711612] border-[#F8C8C6]'
       },
       cihan: {
         id: 'cihan',
@@ -376,9 +277,9 @@
         nameKu: 'بانکی جیهان',
         shortNameKu: 'جیهان',
         iconName: 'building-2',
-        gradient: 'from-emerald-600 to-teal-800',
-        colorHex: '#10b981',
-        badge: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+        gradient: 'from-[#AB7431] to-[#C9933B]',
+        colorHex: '#AB7431',
+        badge: 'bg-[#FDF9F2] text-[#8A5825] border-[#F4E0BB]'
       },
       qi: {
         id: 'qi',
@@ -387,9 +288,9 @@
         nameKu: 'کیو کارت',
         shortNameKu: 'کیو کارت',
         iconName: 'credit-card',
-        gradient: 'from-amber-600 to-orange-700',
-        colorHex: '#f59e0b',
-        badge: 'bg-amber-100 text-amber-800 border-amber-200'
+        gradient: 'from-[#8A5825] to-[#AB7431]',
+        colorHex: '#8A5825',
+        badge: 'bg-[#FDF9F2] text-[#704522] border-[#ECCB8F]'
       },
       hyperpost: {
         id: 'hyperpost',
@@ -398,9 +299,9 @@
         nameKu: 'هایپەر پۆست',
         shortNameKu: 'هایپەر پۆست',
         iconName: 'layers',
-        gradient: 'from-purple-600 to-violet-800',
-        colorHex: '#8b5cf6',
-        badge: 'bg-purple-100 text-purple-800 border-purple-200'
+        gradient: 'from-[#520D0A] to-[#711612]',
+        colorHex: '#520D0A',
+        badge: 'bg-rose-50 text-[#520D0A] border-rose-200'
       },
       cash: {
         id: 'cash',
@@ -423,8 +324,7 @@
         'Merchant Commission',
         'Direct Sales Revenue',
         'Storage & Warehousing',
-        'Client Fee Recovery',
-        'Other Revenue'
+        'Client Fee Recovery', 'Partner Loan Repayment', 'Other Revenue'
       ],
       expense: [
         'Logistics & Fuel',
@@ -437,31 +337,340 @@
         'General Operations'
       ],
       transfer: ['Internal Account Rebalance', 'Cash to Bank Deposit', 'Bank to Card Top-up'],
-      withdrawal: ['Partner Drawing', 'Dividend Payout', 'Personal Expense Reimbursement']
+      withdrawal: ['Partner Drawing', 'Partner Loan / Advance', 'Dividend Payout', 'Personal Expense Reimbursement']
     };
 
-    function App() {
-      // Language State
-      const [lang, setLang] = useState(() => {
-        return localStorage.getItem('ordercenter_lang') || 'ku';
-      });
+    
+    // ==========================================
+    // AUTHENTICATION & LOGIN SCREEN COMPONENT
+    // ==========================================
+    function LoginScreen({ users, userPasswords, onLogin }) {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [showPassword, setShowPassword] = useState(false);
+      const [error, setError] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
 
-      const t = TRANSLATIONS[lang];
-      const isRtl = lang === 'ku';
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
 
-      // Switch language & document direction
-      const toggleLanguage = () => {
-        const nextLang = lang === 'en' ? 'ku' : 'en';
-        setLang(nextLang);
-        localStorage.setItem('ordercenter_lang', nextLang);
-        document.documentElement.dir = nextLang === 'ku' ? 'rtl' : 'ltr';
-        document.documentElement.lang = nextLang;
+        setTimeout(() => {
+          const user = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+          if (!user) {
+            setError('Account not found. Please check your username.');
+            setIsLoading(false);
+            return;
+          }
+
+          if (!user.active) {
+            setError('This account has been deactivated by the administrator.');
+            setIsLoading(false);
+            return;
+          }
+
+          const correctPassword = userPasswords[user.username] || 'admin123';
+          if (password !== correctPassword) {
+            setError('Incorrect password. Please try again.');
+            setIsLoading(false);
+            return;
+          }
+
+          setIsLoading(false);
+          onLogin(user);
+        }, 350);
       };
 
+      
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#350705] to-slate-950 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+          {/* Ambient Brand Glows */}
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#711612]/30 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-10 right-10 w-72 h-72 bg-[#AB7431]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="w-full max-w-md relative z-10">
+            {/* Brand Logo & Header */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] text-white shadow-2xl shadow-[#711612]/40 mb-4 border border-white/10">
+                <Icon name="shield" className="w-8 h-8" />
+              </div>
+              <h1 className="text-3xl font-black text-white tracking-tight">Order Center</h1>
+              <p className="text-xs font-bold tracking-widest text-slate-300 uppercase mt-1">
+                Global Shopping & Shipping
+              </p>
+              <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-white/90 text-xs font-semibold backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-[#AB7431] animate-pulse"></span>
+                <span>Treasury & Financial Operations ERP</span>
+              </div>
+            </div>
+
+            {/* Login Card */}
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+              <div className="mb-6">
+                <h2 className="text-xl font-black text-slate-900">Sign In</h2>
+                <p className="text-xs text-slate-500 mt-1">Enter your credentials to access the financial portal</p>
+              </div>
+
+              {error && (
+                <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2.5">
+                  <Icon name="alert-circle" className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Username or Email</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="user" className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. admin or username"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#711612] focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="lock" className="w-4 h-4" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#711612] focus:bg-white transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                    >
+                      <Icon name={showPassword ? 'eye-off' : 'eye'} className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/30 transition transform active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <Icon name="log-in" className="w-4 h-4" />
+                        <span>Sign In to Dashboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              </div>
+            <p className="text-center text-xs text-slate-400 mt-6 font-medium">
+              Order Center ERP · Secure Corporate Financial Management
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      // Language State (Permanently English - Kurdish removed)
+      const lang = 'en';
+      const t = TRANSLATIONS.en;
+      const isRtl = false;
+
+      // Authentication & Users State
+      const [users, setUsers] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_users');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              // Ensure admin is named Wazham and has admin role
+              const updated = parsed.map(u => u.username === 'admin' ? { ...u, name: 'Wazham', role: 'admin', partner: 'Wazham' } : u);
+              localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+              return updated;
+            }
+          } catch (e) {}
+        }
+        const defaultUsers = [
+          { id: 'usr_admin', name: 'Wazham', username: 'admin', role: 'admin', partner: 'Wazham', createdAt: '2026-01-01', active: true },
+          { id: 'usr_staff', name: 'Staff User', username: 'user', role: 'user', partner: 'Staff', createdAt: '2026-01-15', active: true }
+        ];
+        localStorage.setItem('ordercenter_users', JSON.stringify(defaultUsers));
+        return defaultUsers;
+      });
+
+      const [userPasswords, setUserPasswords] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_passwords');
+        if (saved) {
+          try { return JSON.parse(saved); } catch (e) {}
+        }
+        return {
+          admin: 'admin123',
+          wazham: 'wazham123',
+          user: 'user123'
+        };
+      });
+
+      const [currentUser, setCurrentUser] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_session');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && (parsed.username === 'admin' || parsed.role === 'admin')) {
+              const updatedAdmin = { ...parsed, name: 'Wazham', role: 'admin', partner: 'Wazham' };
+              localStorage.setItem('ordercenter_session', JSON.stringify(updatedAdmin));
+              return updatedAdmin;
+            }
+            return parsed;
+          } catch (e) {}
+        }
+        return null;
+      });
+
+      // Modals for User Management
+      const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+      const [newUserForm, setNewUserForm] = useState({
+        name: '',
+        username: '',
+        password: '',
+        role: 'user',
+        partner: 'Staff'
+      });
+      const [resetPasswordModal, setResetPasswordModal] = useState({
+        isOpen: false,
+        username: '',
+        name: '',
+        newPassword: ''
+      });
+
+      const handleLogout = () => {
+        setConfirmDialog({
+          title: 'Sign Out Confirmation',
+          message: 'Are you sure you want to log out of the Order Center portal?',
+          confirmLabel: 'Yes, Sign Out',
+          confirmColor: 'bg-[#711612] hover:bg-[#5A0E0B]',
+          onConfirm: async () => {
+            if (typeof api !== 'undefined' && api.logout) {
+              await api.logout();
+            }
+            setCurrentUser(null);
+            localStorage.removeItem('ordercenter_session');
+            localStorage.removeItem('ordercenter_token');
+            triggerToast('Signed out successfully.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      const handleAddUser = (e) => {
+        e.preventDefault();
+        const trimmedUsername = newUserForm.username.trim().toLowerCase();
+        if (!trimmedUsername || !newUserForm.name.trim() || !newUserForm.password.trim()) {
+          triggerToast('Please fill in all required fields.');
+          return;
+        }
+
+        if (users.some(u => u.username.toLowerCase() === trimmedUsername)) {
+          triggerToast('Username is already taken. Please choose another.');
+          return;
+        }
+
+        const newUser = {
+          id: 'usr_' + Date.now(),
+          name: newUserForm.name.trim(),
+          username: trimmedUsername,
+          role: 'user',
+          partner: newUserForm.partner,
+          createdAt: new Date().toISOString().split('T')[0],
+          active: true
+        };
+
+        const updatedUsers = [...users, newUser];
+        const updatedPasswords = { ...userPasswords, [trimmedUsername]: newUserForm.password.trim() };
+
+        setUsers(updatedUsers);
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('ordercenter_users', JSON.stringify(updatedUsers));
+        localStorage.setItem('ordercenter_passwords', JSON.stringify(updatedPasswords));
+
+        setIsAddUserModalOpen(false);
+        setNewUserForm({ name: '', username: '', password: '', role: 'user', partner: 'Staff' });
+        triggerToast(`User "${newUser.name}" added successfully as ${newUser.role.toUpperCase()}!`);
+      };
+
+      const handleToggleUserStatus = (userId) => {
+        const target = users.find(u => u.id === userId);
+        if (!target) return;
+        if (target.id === currentUser?.id) {
+          triggerToast('You cannot deactivate your own current account.');
+          return;
+        }
+
+        const updated = users.map(u => u.id === userId ? { ...u, active: !u.active } : u);
+        setUsers(updated);
+        localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+        triggerToast(`User ${target.name} is now ${!target.active ? 'Active' : 'Suspended'}.`);
+      };
+
+      const handleDeleteUser = (userId) => {
+        const target = users.find(u => u.id === userId);
+        if (!target) return;
+        if (target.id === currentUser?.id) {
+          triggerToast('You cannot delete your own account while signed in.');
+          return;
+        }
+
+        setConfirmDialog({
+          title: 'Delete User Account',
+          message: `Are you sure you want to permanently delete the account for "${target.name}" (@${target.username})? This user will no longer be able to sign in.`,
+          confirmLabel: 'Yes, Delete User',
+          confirmColor: 'bg-rose-600 hover:bg-rose-700',
+          onConfirm: () => {
+            const updated = users.filter(u => u.id !== userId);
+            setUsers(updated);
+            localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+            triggerToast(`User ${target.name} removed.`);
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      const handleSaveNewPassword = (e) => {
+        e.preventDefault();
+        if (!resetPasswordModal.newPassword.trim()) {
+          triggerToast('Please provide a valid new password.');
+          return;
+        }
+
+        const updatedPasswords = { ...userPasswords, [resetPasswordModal.username]: resetPasswordModal.newPassword.trim() };
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('ordercenter_passwords', JSON.stringify(updatedPasswords));
+        triggerToast(`Password for @${resetPasswordModal.username} updated successfully.`);
+        setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' });
+      };
+
+
       useEffect(() => {
-        document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
-        document.documentElement.lang = lang;
-      }, [lang, isRtl]);
+        document.documentElement.dir = 'ltr';
+        document.documentElement.lang = 'en';
+      }, []);
 
       // Transactions Store (Fresh, clean start)
       const [transactions, setTransactions] = useState(() => {
@@ -620,29 +829,46 @@
         let totalRevenue = 0;
         let totalExpenses = 0;
         let partnerWithdrawals = { Sarwar: 0, Wazham: 0 };
+        let partnerLoans = { Sarwar: 0, Wazham: 0 };
 
         transactions.forEach((tx) => {
           const amtIQD = toIQD(tx.amount, tx.currency);
-          if (tx.type === 'income') {
+          const cat = (tx.category || '').toLowerCase();
+          const isLoan = cat.includes('loan') || cat.includes('advance');
+
+          if (tx.type === 'withdrawal') {
+            if (isLoan) {
+              if (partnerLoans[tx.partner] !== undefined) {
+                partnerLoans[tx.partner] += amtIQD;
+              }
+            } else {
+              if (partnerWithdrawals[tx.partner] !== undefined) {
+                partnerWithdrawals[tx.partner] += amtIQD;
+              }
+            }
+          } else if (tx.type === 'income' && isLoan) {
+            if (partnerLoans[tx.partner] !== undefined) {
+              partnerLoans[tx.partner] = Math.max(0, partnerLoans[tx.partner] - amtIQD);
+            }
+          } else if (tx.type === 'income') {
             totalRevenue += amtIQD;
           } else if (tx.type === 'expense') {
             totalExpenses += amtIQD;
-          } else if (tx.type === 'withdrawal') {
-            if (partnerWithdrawals[tx.partner] !== undefined) {
-              partnerWithdrawals[tx.partner] += amtIQD;
-            }
           }
         });
 
         const netProfit = totalRevenue - totalExpenses;
-        const netRetained = netProfit - (partnerWithdrawals.Sarwar + partnerWithdrawals.Wazham);
+        const totalDrawings = partnerWithdrawals.Sarwar + partnerWithdrawals.Wazham;
+        const totalLoans = partnerLoans.Sarwar + partnerLoans.Wazham;
+        const netRetained = netProfit - totalDrawings - totalLoans;
 
         return {
           totalRevenue,
           totalExpenses,
           netProfit,
           netRetained,
-          partnerWithdrawals
+          partnerWithdrawals,
+          partnerLoans
         };
       }, [transactions, exchangeRate]);
 
@@ -759,7 +985,7 @@
           : `Transferred from ${ACCOUNTS[newTx.accountId].shortName} to ${ACCOUNTS[newTx.toAccountId].shortName}!`);
       };
 
-      const openNewTxModal = (type = 'income') => {
+      const openNewTxModal = (type = 'income', partner = 'Sarwar', category = null) => {
         setEditingTx(null);
         setTxForm({
           type,
@@ -767,8 +993,8 @@
           currency: 'IQD',
           accountId: 'fib',
           toAccountId: 'cash',
-          partner: 'Sarwar',
-          category: (TRANSACTION_CATEGORIES[type] && TRANSACTION_CATEGORIES[type][0]) || 'General',
+          partner: partner || 'Sarwar',
+          category: category || ((TRANSACTION_CATEGORIES[type] && TRANSACTION_CATEGORIES[type][0]) || 'General'),
           refNumber: '',
           notes: '',
           date: new Date().toISOString().slice(0, 16)
@@ -904,14 +1130,19 @@
         const sarwarWithdrawn = metrics.partnerWithdrawals.Sarwar;
         const wazhamWithdrawn = metrics.partnerWithdrawals.Wazham;
 
-        const sarwarNetDue = sarwarEntitled - sarwarWithdrawn;
-        const wazhamNetDue = wazhamEntitled - wazhamWithdrawn;
+        const sarwarLoan = metrics.partnerLoans.Sarwar;
+        const wazhamLoan = metrics.partnerLoans.Wazham;
+
+        const sarwarNetDue = sarwarEntitled - sarwarWithdrawn - sarwarLoan;
+        const wazhamNetDue = wazhamEntitled - wazhamWithdrawn - wazhamLoan;
 
         return {
           sarwarEntitled,
           wazhamEntitled,
           sarwarWithdrawn,
           wazhamWithdrawn,
+          sarwarLoan,
+          wazhamLoan,
           sarwarNetDue,
           wazhamNetDue
         };
@@ -921,6 +1152,21 @@
       const getAccountName = (acc) => (lang === 'ku' ? acc.nameKu : acc.name);
       const getAccountShortName = (acc) => (lang === 'ku' ? acc.shortNameKu : acc.shortName);
       const getPartnerName = (p) => (p === 'Sarwar' ? (lang === 'ku' ? 'سەروەر' : 'Sarwar') : (lang === 'ku' ? 'واژام' : 'Wazham'));
+
+      if (!currentUser) {
+        return (
+          <LoginScreen
+            users={users}
+            userPasswords={userPasswords}
+            onLogin={(user) => {
+              setCurrentUser(user);
+              localStorage.setItem('ordercenter_session', JSON.stringify(user));
+              triggerToast(`Welcome back, ${user.name}!`);
+            }}
+          />
+        );
+      }
+
 
       return (
         <div className={`min-h-screen ${isRtl ? 'font-nrt' : ''}`}>
@@ -1103,17 +1349,15 @@
                 
                 {/* Brand Logo & Title */}
                 <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-xl shadow-indigo-600/25">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] flex items-center justify-center text-white shadow-xl shadow-[#711612]/20">
                     <Icon name="layers" className="w-6 h-6" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2.5">
-                      <span className="text-xl font-black tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      <span className="text-xl font-black tracking-tight text-[#711612]">
                         {t.appTitle}
                       </span>
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {t.appBadge}
-                      </span>
+                      
                     </div>
                     <p className="text-xs text-slate-500 font-medium">
                       {t.appSubtitle}
@@ -1123,14 +1367,6 @@
 
                 {/* Quick Actions & Language Toggle */}
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <button
-                    onClick={toggleLanguage}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition shadow-sm"
-                  >
-                    <Icon name="globe" className="w-4 h-4 text-indigo-600" />
-                    <span>{lang === 'ku' ? 'English' : 'کوردی (NRT)'}</span>
-                  </button>
-
                   <button
                     onClick={() => setActiveTab('settings')}
                     className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition border ${
@@ -1162,11 +1398,22 @@
 
                   <button
                     onClick={() => openNewTxModal('income')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-95"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-[#711612]/25 transition transform active:scale-95"
                   >
                     <Icon name="plus-circle" className="w-4 h-4" />
                     <span>{t.newTransaction}</span>
                   </button>
+
+                  {/* Current User Badge & Logout */}
+                  <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-200">
+                    <button onClick={handleLogout}
+                      title="Sign Out of ERP"
+                      className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition border border-transparent hover:border-rose-200"
+                    >
+                      <Icon name="log-out" className="w-4 h-4" />
+                    </button>
+                  </div>
+
                 </div>
               </div>
 
@@ -1177,7 +1424,8 @@
                   { id: 'transactions', label: `${t.tabTransactions} (${filteredTransactions.length})`, iconName: 'file-text' },
                   { id: 'partners', label: t.tabPartners, iconName: 'users' },
                   { id: 'analytics', label: t.tabAnalytics, iconName: 'bar-chart-3' },
-                  { id: 'settings', label: t.tabSettings, iconName: 'sliders' }
+                  { id: 'settings', label: t.tabSettings, iconName: 'sliders' },
+                  ...(currentUser?.role === 'admin' ? [{ id: 'users', label: `Team & Users (${users.length})`, iconName: 'shield' }] : [])
                 ].map((tab) => {
                   const isActive = activeTab === tab.id;
                   return (
@@ -1207,7 +1455,7 @@
               <div className="space-y-8">
                 {/* Hero Card */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7 relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-indigo-950 via-slate-900 to-zinc-950 text-white shadow-2xl border border-indigo-800/40 flex flex-col justify-between">
+                  <div className="lg:col-span-7 relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-2xl border border-indigo-800/40 flex flex-col justify-between">
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                         <span className="text-xs uppercase tracking-wider font-extrabold text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-400/20">
@@ -1282,39 +1530,81 @@
                       </div>
 
                       <div className="space-y-4 mt-5">
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                          <div>
+                        {/* Sarwar Card */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-black text-slate-800">{getPartnerName('Sarwar')}</span>
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
                                 {equityRatio.Sarwar}% {t.agreedSplit}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">{t.totalDrawingsToDate}</p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Partner</span>
                           </div>
-                          <div className={isRtl ? 'text-left' : 'text-right'}>
-                            <span className="text-base font-black text-amber-600">
-                              {formatIQD(metrics.partnerWithdrawals.Sarwar)}
-                            </span>
-                            <p className="text-[11px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Sarwar)}</p>
+                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                            <div>
+                              <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
+                              <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
+                                {formatIQD(metrics.partnerWithdrawals.Sarwar)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Sarwar)}</p>
+                            </div>
+                            <div className="text-right border-l border-slate-200/60 pl-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                  title="Record a new loan for Sarwar"
+                                >
+                                  + Add Loan
+                                </button>
+                              </div>
+                              <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
+                                {formatIQD(metrics.partnerLoans.Sarwar)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerLoans.Sarwar)}</p>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                          <div>
+                        {/* Wazham Card */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-black text-slate-800">{getPartnerName('Wazham')}</span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FDF2F2] text-[#711612] border border-[#F8C8C6]">
                                 {equityRatio.Wazham}% {t.agreedSplit}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">{t.totalDrawingsToDate}</p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Administrator</span>
                           </div>
-                          <div className={isRtl ? 'text-left' : 'text-right'}>
-                            <span className="text-base font-black text-amber-600">
-                              {formatIQD(metrics.partnerWithdrawals.Wazham)}
-                            </span>
-                            <p className="text-[11px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Wazham)}</p>
+                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                            <div>
+                              <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
+                              <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
+                                {formatIQD(metrics.partnerWithdrawals.Wazham)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Wazham)}</p>
+                            </div>
+                            <div className="text-right border-l border-slate-200/60 pl-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                  title="Record a new loan for Sarwar"
+                                >
+                                  + Add Loan
+                                </button>
+                              </div>
+                              <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
+                                {formatIQD(metrics.partnerLoans.Wazham)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerLoans.Wazham)}</p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1776,34 +2066,52 @@
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="p-4 rounded-2xl bg-slate-50">
                         <span className="text-xs font-semibold text-slate-400">{t.entitledShare}</span>
-                        <p className="text-lg font-black text-slate-800 mt-1">
+                        <p className="text-base sm:text-lg font-black text-slate-800 mt-1">
                           {formatIQD(partnerSettlement.sarwarEntitled)}
                         </p>
                       </div>
                       <div className="p-4 rounded-2xl bg-slate-50">
                         <span className="text-xs font-semibold text-slate-400">{t.totalWithdrawn}</span>
-                        <p className="text-lg font-black text-amber-600 mt-1">
+                        <p className="text-base sm:text-lg font-black text-amber-600 mt-1">
                           {formatIQD(partnerSettlement.sarwarWithdrawn)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-100">
+                        <span className="text-xs font-semibold text-rose-600">Active Loan:</span>
+                        <p className="text-base sm:text-lg font-black text-rose-700 mt-1">
+                          {formatIQD(partnerSettlement.sarwarLoan)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-blue-50/60 border border-blue-200 flex items-center justify-between">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/60 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <span className="text-xs font-bold text-blue-900">{t.netDueTo} {getPartnerName('Sarwar')}:</span>
                         <p className="text-xl font-black text-blue-950 mt-0.5">
                           {formatIQD(partnerSettlement.sarwarNetDue)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => openNewTxModal('withdrawal')}
-                        className="px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition"
-                      >
-                        {t.logDrawing}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                          title="Add loan for Sarwar"
+                        >
+                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                          <span>+ Add Loan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Drawing')}
+                          className="px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition"
+                        >
+                          {t.logDrawing}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1824,34 +2132,52 @@
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="p-4 rounded-2xl bg-slate-50">
                         <span className="text-xs font-semibold text-slate-400">{t.entitledShare}</span>
-                        <p className="text-lg font-black text-slate-800 mt-1">
+                        <p className="text-base sm:text-lg font-black text-slate-800 mt-1">
                           {formatIQD(partnerSettlement.wazhamEntitled)}
                         </p>
                       </div>
                       <div className="p-4 rounded-2xl bg-slate-50">
                         <span className="text-xs font-semibold text-slate-400">{t.totalWithdrawn}</span>
-                        <p className="text-lg font-black text-amber-600 mt-1">
+                        <p className="text-base sm:text-lg font-black text-amber-600 mt-1">
                           {formatIQD(partnerSettlement.wazhamWithdrawn)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-100">
+                        <span className="text-xs font-semibold text-rose-600">Active Loan:</span>
+                        <p className="text-base sm:text-lg font-black text-rose-700 mt-1">
+                          {formatIQD(partnerSettlement.wazhamLoan)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-purple-50/60 border border-purple-200 flex items-center justify-between">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF0DC]/70 border border-[#F4E0BB] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <span className="text-xs font-bold text-purple-900">{t.netDueTo} {getPartnerName('Wazham')}:</span>
-                        <p className="text-xl font-black text-purple-950 mt-0.5">
+                        <span className="text-xs font-bold text-[#704522]">{t.netDueTo} {getPartnerName('Wazham')}:</span>
+                        <p className="text-xl font-black text-[#5C391E] mt-0.5">
                           {formatIQD(partnerSettlement.wazhamNetDue)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => openNewTxModal('withdrawal')}
-                        className="px-3 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition"
-                      >
-                        {t.logDrawing}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Loan / Advance')}
+                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                          title="Add loan for Wazham"
+                        >
+                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                          <span>+ Add Loan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Drawing')}
+                          className="px-3 py-2 text-xs font-bold bg-[#AB7431] hover:bg-[#8A5825] text-white rounded-xl shadow-sm transition"
+                        >
+                          {t.logDrawing}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2088,7 +2414,7 @@
                     <div className="pt-2 flex justify-end">
                       <button
                         type="submit"
-                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-[#711612]/25 transition flex items-center gap-2"
                       >
                         <Icon name="check" className="w-4 h-4" />
                         <span>{t.saveSettings}</span>
@@ -2145,6 +2471,346 @@
                 </div>
               </div>
             )}
+
+            {/* ===================== TAB: USER MANAGEMENT (ADMIN ONLY) ===================== */}
+            {activeTab === 'users' && currentUser?.role === 'admin' && (
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="p-6 rounded-3xl bg-gradient-to-r from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-xl border border-[#8C1E1A]/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#AB7431] text-white">
+                        Access Control Center
+                      </span>
+                      <span className="text-xs text-slate-300 font-medium">Administrator: Wazham</span>
+                    </div>
+                    <h2 className="text-2xl font-black tracking-tight">Portal User Management</h2>
+                    <p className="text-xs text-slate-300 max-w-xl mt-1">
+                      Authorized by Wazham: Add and manage team members with standard user access to the Order Center platform.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddUserModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-[#AB7431] hover:bg-[#8A5825] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition transform active:scale-95"
+                  >
+                    <Icon name="user-plus" className="w-4 h-4" />
+                    <span>+ Add New User</span>
+                  </button>
+                </div>
+
+                {/* User Metrics Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Accounts</span>
+                    <div className="text-2xl font-black text-slate-900 mt-1">{users.length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-[#F8C8C6] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#711612] uppercase tracking-wider">Administrators</span>
+                    <div className="text-2xl font-black text-[#711612] mt-1">{users.filter(u => u.role === 'admin').length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-[#F4E0BB] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#8A5825] uppercase tracking-wider">Staff Users</span>
+                    <div className="text-2xl font-black text-[#8A5825] mt-1">{users.filter(u => u.role === 'user').length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-sm">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Active Status</span>
+                    <div className="text-2xl font-black text-emerald-600 mt-1">{users.filter(u => u.active).length}</div>
+                  </div>
+                </div>
+
+                {/* Users Table Card */}
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900">Registered Portal Users</h3>
+                      <p className="text-xs text-slate-500">All authenticated identities with access to this ERP instance</p>
+                    </div>
+                    <button
+                      onClick={() => setIsAddUserModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#711612] bg-[#FDF2F2] hover:bg-[#FDE4E4] border border-[#F8C8C6] rounded-xl transition"
+                    >
+                      <Icon name="plus" className="w-3.5 h-3.5" />
+                      <span>Add User</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="p-3.5">User</th>
+                          <th className="p-3.5">Role</th>
+                          <th className="p-3.5">Department / Partner</th>
+                          <th className="p-3.5">Status</th>
+                          <th className="p-3.5">Date Added</th>
+                          <th className="p-3.5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {users.map((u) => {
+                          const isSelf = u.id === currentUser?.id;
+                          return (
+                            <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                              <td className="p-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs ${
+                                    u.role === 'admin' ? 'bg-[#711612]' : 'bg-[#AB7431]'
+                                  }`}>
+                                    {u.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                      <span>{u.name}</span>
+                                      {isSelf && (
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                                          You
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono">@{u.username}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3.5">
+                                {u.role === 'admin' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF2F2] text-[#711612] border border-[#F8C8C6] font-bold text-[10px] uppercase">
+                                    <Icon name="shield" className="w-3 h-3 text-[#711612]" />
+                                    Administrator
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF9F2] text-[#8A5825] border border-[#F4E0BB] font-bold text-[10px] uppercase">
+                                    <Icon name="user" className="w-3 h-3 text-[#AB7431]" />
+                                    Staff User
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-3.5">
+                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-semibold text-slate-700 text-xs">
+                                  {u.partner || 'General'}
+                                </span>
+                              </td>
+
+                              <td className="p-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleUserStatus(u.id)}
+                                  disabled={isSelf}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition ${
+                                    u.active 
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                                  } ${isSelf ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${u.active ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                  <span>{u.active ? 'Active' : 'Suspended'}</span>
+                                </button>
+                              </td>
+
+                              <td className="p-3.5 text-slate-500 font-mono text-[11px]">
+                                {u.createdAt || '2026-01-01'}
+                              </td>
+
+                              <td className="p-3.5 text-right">
+                                <div className="inline-flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => setResetPasswordModal({
+                                      isOpen: true,
+                                      username: u.username,
+                                      name: u.name,
+                                      newPassword: ''
+                                    })}
+                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                    title="Reset Password"
+                                  >
+                                    <Icon name="key" className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {!isSelf && (
+                                    <button
+                                      onClick={() => handleDeleteUser(u.id)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                      title="Delete Account"
+                                    >
+                                      <Icon name="trash-2" className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===================== MODAL: ADD NEW USER ===================== */}
+            {isAddUserModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+                <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#FDF2F2] border border-[#F8C8C6] text-[#711612] flex items-center justify-center">
+                        <Icon name="user-plus" className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Add Portal User</h3>
+                        <p className="text-xs text-slate-500">Provision a new account with customized access role</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsAddUserModalOpen(false)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      <Icon name="x" className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAddUser} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ali Ahmed"
+                        value={newUserForm.name}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Username (Login ID) *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. ali or ali@ordercenter"
+                          value={newUserForm.username}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, username: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Initial Password *</label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="••••••••"
+                          value={newUserForm.password}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Role</label>
+                        <div className="w-full p-2.5 text-xs font-bold bg-slate-100 border border-slate-200 rounded-xl text-slate-700 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Icon name="user" className="w-3.5 h-3.5 text-[#AB7431]" />
+                            <span>User (Staff Account)</span>
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AB7431] text-white uppercase font-bold">User</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Department / Branch</label>
+                        <select
+                          value={newUserForm.partner}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, partner: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                        >
+                          <option value="Sarwar">Sarwar Department</option>
+                          <option value="Wazham">Wazham Department</option>
+                          <option value="Staff">Operations Staff</option>
+                          <option value="Accounting">Accounting / Audit</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddUserModalOpen(false)}
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                      >
+                        Create User Account
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ===================== MODAL: RESET PASSWORD ===================== */}
+            {resetPasswordModal.isOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+                <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center">
+                        <Icon name="key" className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Reset Password</h3>
+                        <p className="text-xs text-slate-500">For @{resetPasswordModal.username} ({resetPasswordModal.name})</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      <Icon name="x" className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveNewPassword} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">New Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Enter new password"
+                        value={resetPasswordModal.newPassword}
+                        onChange={(e) => setResetPasswordModal({ ...resetPasswordModal, newPassword: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                      />
+                    </div>
+
+                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                      >
+                        Save Password
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
           </main>
 
           {/* MODAL: TRANSACTION */}
@@ -2334,7 +3000,7 @@
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/30"
+                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-[#711612]/25"
                     >
                       {editingTx ? t.updateEntry : t.postToLedger}
                     </button>
@@ -2499,6 +3165,7 @@
                           <th className="p-3">{t.colPartner}</th>
                           <th className="p-3">{t.entitledShare}</th>
                           <th className="p-3">{t.totalWithdrawn}</th>
+                          <th className="p-3">Partner Loan:</th>
                           <th className={`p-3 ${isRtl ? 'text-left' : 'text-right'}`}>{t.netLiquidationOwed}</th>
                         </tr>
                       </thead>
@@ -2507,6 +3174,7 @@
                           <td className="p-3 font-bold text-slate-800">{getPartnerName('Sarwar')} ({equityRatio.Sarwar}%)</td>
                           <td className="p-3">{formatIQD(partnerSettlement.sarwarEntitled)}</td>
                           <td className="p-3 text-amber-600">-{formatIQD(partnerSettlement.sarwarWithdrawn)}</td>
+                          <td className="p-3 text-rose-600 font-bold">-{formatIQD(partnerSettlement.sarwarLoan)}</td>
                           <td className={`p-3 ${isRtl ? 'text-left' : 'text-right'} font-black text-indigo-600`}>
                             {formatIQD(partnerSettlement.sarwarNetDue)}
                           </td>
@@ -2515,6 +3183,7 @@
                           <td className="p-3 font-bold text-slate-800">{getPartnerName('Wazham')} ({equityRatio.Wazham}%)</td>
                           <td className="p-3">{formatIQD(partnerSettlement.wazhamEntitled)}</td>
                           <td className="p-3 text-amber-600">-{formatIQD(partnerSettlement.wazhamWithdrawn)}</td>
+                          <td className="p-3 text-rose-600 font-bold">-{formatIQD(partnerSettlement.wazhamLoan)}</td>
                           <td className={`p-3 ${isRtl ? 'text-left' : 'text-right'} font-black text-purple-600`}>
                             {formatIQD(partnerSettlement.wazhamNetDue)}
                           </td>

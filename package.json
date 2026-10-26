@@ -1,0 +1,14 @@
+{
+  "name": "ordercenter-erp",
+  "version": "2.4.0",
+  "description": "Order Center ERP - Treasury, Multi-Account Liquidity & User Management Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

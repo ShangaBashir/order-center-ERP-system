@@ -1,0 +1,3440 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Center ERP - Treasury & Financial Management</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'Segoe UI', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#FDF2F2',
+              100: '#FDE4E4',
+              200: '#F8C8C6',
+              300: '#EE9F9C',
+              400: '#DC6460',
+              500: '#B82E29',
+              600: '#94201C',
+              700: '#7B1815',
+              800: '#711612',
+              900: '#520D0A',
+              950: '#340604',
+            },
+            accent: {
+              50: '#FDF9F2',
+              100: '#FAF1DE',
+              200: '#F4E0BB',
+              300: '#ECCB8F',
+              400: '#E0B25E',
+              500: '#C9933B',
+              600: '#AB7431',
+              700: '#8A5825',
+              800: '#704522',
+              900: '#5C391E',
+              950: '#351F0E',
+            },
+            indigo: {
+              50: '#FDF2F2',
+              100: '#FDE4E4',
+              200: '#F8C8C6',
+              300: '#EE9F9C',
+              400: '#DC6460',
+              500: '#B82E29',
+              600: '#7B1815',
+              700: '#711612',
+              800: '#520D0A',
+              900: '#340604',
+              950: '#220302',
+            },
+            purple: {
+              50: '#FDF9F2',
+              100: '#FAF1DE',
+              200: '#F4E0BB',
+              300: '#ECCB8F',
+              400: '#E0B25E',
+              500: '#C9933B',
+              600: '#AB7431',
+              700: '#8A5825',
+              800: '#704522',
+              900: '#5C391E',
+              950: '#351F0E',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- React 18 & ReactDOM & Babel for in-browser JSX parsing -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons standalone script -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    .font-nrt {
+      font-family: 'Plus Jakarta Sans', sans-serif !important;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @media print {
+      @page { size: A4 portrait; margin: 12mm 10mm 15mm 10mm; }
+      body { background-color: #ffffff !important; color: #0f172a !important; font-size: 11pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      header, footer, .no-print, button, input, select, .modal-overlay, #toast-container { display: none !important; }
+      .print-only-statement { display: block !important; }
+      tr, .print-card { page-break-inside: avoid !important; break-inside: avoid !important; }
+      table { width: 100% !important; border-collapse: collapse !important; }
+      th, td { border-bottom: 1px solid #cbd5e1 !important; padding: 6px 8px !important; }
+    }
+    @media screen { .print-only-statement { display: none; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased selection:bg-[#711612] selection:text-white">
+
+  <!-- Root mount node -->
+  <div id="root"></div>
+
+  <!-- React Application Logic -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Helper dynamic Lucide Icon Renderer for standalone HTML
+    function Icon({ name, className = "w-4 h-4", ...props }) {
+      const containerRef = React.useRef(null);
+
+      React.useEffect(() => {
+        if (containerRef.current && window.lucide) {
+          containerRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
+          window.lucide.createIcons({
+            root: containerRef.current
+          });
+        }
+      }, [name, className]);
+
+      return <span ref={containerRef} className="inline-flex items-center justify-center shrink-0" {...props}></span>;
+    }
+
+    // Translations Dictionary
+    const TRANSLATIONS = {
+      en: {
+        appTitle: 'Order Center ERP',
+        appBadge: 'Treasury v2.4',
+        appSubtitle: 'Multi-Account Liquidity, Executive Ledger & Partner Equity',
+        quickTransfer: 'Quick Transfer',
+        partnerSettlement: 'Partner Settlement',
+        newTransaction: 'New Transaction',
+        tabDashboard: 'Treasury Overview',
+        tabTransactions: 'Transactions',
+        tabPartners: 'Partners & Equity',
+        tabAnalytics: 'Financial Analytics',
+        tabSettings: 'Settings & Opening Balances',
+        settingsTitle: 'System Settings & Opening Balances',
+        settingsSub: 'Set your current actual balances for all 5 accounts to start your accounting from today.',
+        openingBalancesTitle: 'Current Opening Balances (Starting Capital)',
+        openingBalancesDesc: 'Enter the exact amount currently in each account today. All future transactions will calculate on top of these balances.',
+        saveSettings: 'Save Settings & Balances',
+        dangerZone: 'Data Management & Reset',
+        dangerZoneDesc: 'Completely wipe all transaction history or reset opening balances.',
+        clearAllTxBtn: 'Wipe All Transactions',
+        resetEverythingBtn: 'Reset Entire System (Zero Out All)',
+        usdRateLabel: 'USD / IQD Exchange Rate (1 USD = ? IQD)',
+        totalLiquidity: 'Total Consolidated Liquidity',
+        totalRevenue: 'Total Revenue',
+        totalExpenses: 'Total Expenses',
+        netProfit: 'Net Profit',
+        exchangeRateNote: '1 USD ≈',
+        heroDescription: 'Real-time net available balances aggregated across all 5 accounts (FIB, Cihan Bank, Qi Card, Hyper Post, and Physical Cash Safe).',
+        partnerDrawingsTitle: 'Partner Drawings & Split',
+        partnerDrawingsSub: 'Equity Tracking (Sarwar & Wazham)',
+        ledgerBtn: 'Ledger',
+        totalDrawingsToDate: 'Total Drawings to date:',
+        netRetainedInBiz: 'Net Retained In Business:',
+        walletsSectionTitle: 'Primary Wallets & Accounts (5 Sources)',
+        walletsSectionSub: 'Live balance across all integrated payment channels',
+        transferBetweenAccounts: 'Transfer Between Accounts',
+        percentOfTotal: 'of total',
+        viewLedger: 'View ledger →',
+        recentTransactions: 'Recent Transactions',
+        recentTransactionsSub: 'Latest incoming and outgoing movements recorded',
+        viewAll: 'View All',
+        searchPlaceholder: 'Search ledger by notes, invoice / ref #, or category...',
+        exportCsv: 'Export CSV',
+        addEntry: 'Add Entry',
+        accountFilter: 'Account Filter',
+        allAccounts: 'All Accounts (Consolidated)',
+        txTypeFilter: 'Transaction Type',
+        allTypes: 'All Types',
+        partnerFilter: 'Partner / User',
+        allPartners: 'All Partners',
+        datePeriod: 'Date Period',
+        allTime: 'All Time',
+        today: 'Today',
+        past7Days: 'Past 7 Days',
+        thisMonth: 'This Month',
+        resetFilters: 'Reset Filters',
+        masterLedger: 'Master General Ledger',
+        displayingRecords: 'Displaying matching transaction records',
+        reloadSample: 'Clear All Transactions',
+        noRecords: 'No records found',
+        noRecordsSub: 'Ledger is clean. Click "New Transaction" to log your first income, expense, or transfer.',
+        colRefDate: 'Reference & Date',
+        colType: 'Type',
+        colAmount: 'Amount',
+        colAccountFlow: 'Account / Flow',
+        colCategory: 'Category',
+        colPartner: 'Partner',
+        colNotes: 'Reason / Notes',
+        colActions: 'Actions',
+        typeIncome: 'Income',
+        typeExpense: 'Expense',
+        typeTransfer: 'Transfer',
+        typeWithdrawal: 'Partner Drawing',
+        partnersHeaderTitle: 'Partner Capital & Profit Settlement Ledger',
+        partnersHeaderSub: 'Accurately split net profits, deduct individual partner drawings, and view exact balances owed between Sarwar and Wazham.',
+        configureSimulate: 'Configure Ratio & Simulate',
+        agreedSplit: 'Agreed Split',
+        entitledShare: 'Entitled Share:',
+        totalWithdrawn: 'Total Drawings (Taken):',
+        netDueTo: 'Net Due to',
+        logDrawing: 'Log Drawing',
+        auditLogTitle: 'Partner Withdrawals Audit Log',
+        auditLogSub: 'Every personal dividend or drawing taken from any wallet',
+        noWithdrawals: 'No partner withdrawals logged yet.',
+        liquidityDistTitle: 'Liquidity Distribution Across 5 Accounts',
+        liquidityDistSub: 'Visual share of available capital in each institution',
+        revenueByCategory: 'Revenue by Category',
+        expensesByCategory: 'Expenses by Category',
+        share: 'share',
+        recordModalTitleNew: 'Record Financial Movement',
+        recordModalTitleEdit: 'Edit Transaction Record',
+        recordModalSub: 'Enter accounting details, account target, and audit notes',
+        txClassification: 'Transaction Classification',
+        amountCurrency: 'Amount & Currency *',
+        accountTarget: 'Institution / Wallet Account',
+        sourceAccount: 'From Account (Source)',
+        destAccount: 'To Account (Destination)',
+        associatedPartner: 'Recorded By / Associated Partner',
+        accountingCategory: 'Accounting Category',
+        refInvoiceNum: 'Ref # / Order Invoice #',
+        reasonMemo: 'Reason & Detailed Memo *',
+        memoPlaceholder: 'Specify customer/merchant, delivery location, reason of expenditure, or collection details...',
+        dateTimeMovement: 'Date and Time of Movement',
+        cancel: 'Cancel',
+        postToLedger: 'Post to Ledger',
+        updateEntry: 'Update Entry',
+        quickTransferTitle: 'Instant Account Rebalancing',
+        quickTransferSub: 'Move funds seamlessly between internal wallets',
+        transferAmount: 'Amount to Transfer',
+        authorizingPartner: 'Authorizing Partner',
+        transferNote: 'Transfer Note',
+        executeTransfer: 'Execute Transfer',
+        settlementTitle: 'Partner Settlement & Equity Simulator',
+        settlementSub: 'Drag slider to test alternative profit distribution percentages. Default is 50/50.',
+        netLiquidationOwed: 'Net Liquidation Owed',
+        closeSimulator: 'Close Simulator',
+        deleteModalTitle: 'Delete Transaction',
+        deleteModalMessage: 'Are you sure you want to delete this transaction record? This action cannot be undone.',
+        deleteConfirm: 'Delete',
+        footerText: 'Order Center ERP • Corporate Financial Operations Platform • Sulaymaniyah & Erbil'
+      }
+    };
+
+    // Account Metadata
+    const ACCOUNTS = {
+      fib: {
+        id: 'fib',
+        name: 'FIB (First Iraqi Bank)',
+        shortName: 'FIB',
+        nameKu: 'بانکی یەکەمی عێراقی (FIB)',
+        shortNameKu: 'FIB',
+        iconName: 'building-2',
+        gradient: 'from-[#711612] to-[#8C1E1A]',
+        colorHex: '#711612',
+        badge: 'bg-[#FDF2F2] text-[#711612] border-[#F8C8C6]'
+      },
+      cihan: {
+        id: 'cihan',
+        name: 'Cihan Bank',
+        shortName: 'Cihan',
+        nameKu: 'بانکی جیهان',
+        shortNameKu: 'جیهان',
+        iconName: 'building-2',
+        gradient: 'from-[#AB7431] to-[#C9933B]',
+        colorHex: '#AB7431',
+        badge: 'bg-[#FDF9F2] text-[#8A5825] border-[#F4E0BB]'
+      },
+      qi: {
+        id: 'qi',
+        name: 'Qi Card',
+        shortName: 'Qi Card',
+        nameKu: 'کیو کارت',
+        shortNameKu: 'کیو کارت',
+        iconName: 'credit-card',
+        gradient: 'from-[#8A5825] to-[#AB7431]',
+        colorHex: '#8A5825',
+        badge: 'bg-[#FDF9F2] text-[#704522] border-[#ECCB8F]'
+      },
+      hyperpost: {
+        id: 'hyperpost',
+        name: 'Hyper Post',
+        shortName: 'Hyper Post',
+        nameKu: 'هایپەر پۆست',
+        shortNameKu: 'هایپەر پۆست',
+        iconName: 'layers',
+        gradient: 'from-[#520D0A] to-[#711612]',
+        colorHex: '#520D0A',
+        badge: 'bg-rose-50 text-[#520D0A] border-rose-200'
+      },
+      cash: {
+        id: 'cash',
+        name: 'Cash Safe (Drawer)',
+        shortName: 'Cash',
+        nameKu: 'کاش (سندوقی دەستی)',
+        shortNameKu: 'کاش',
+        iconName: 'banknote',
+        gradient: 'from-slate-700 to-zinc-900',
+        colorHex: '#64748b',
+        badge: 'bg-slate-200 text-slate-800 border-slate-300'
+      }
+    };
+
+    const PARTNERS = ['Sarwar', 'Wazham'];
+
+    const TRANSACTION_CATEGORIES = {
+      income: [
+        'Delivery Settlement',
+        'Merchant Commission',
+        'Direct Sales Revenue',
+        'Storage & Warehousing',
+        'Client Fee Recovery', 'Partner Loan Repayment', 'Other Revenue'
+      ],
+      expense: [
+        'Logistics & Fuel',
+        'Courier & Driver Payroll',
+        'Warehouse & Office Rent',
+        'Marketing & Paid Ads',
+        'Software & Telephony',
+        'Packaging & Supplies',
+        'Merchant Payout / Refund',
+        'General Operations'
+      ],
+      transfer: ['Internal Account Rebalance', 'Cash to Bank Deposit', 'Bank to Card Top-up'],
+      withdrawal: ['Partner Drawing', 'Partner Loan / Advance', 'Dividend Payout', 'Personal Expense Reimbursement']
+    };
+
+    
+    
+    // ==========================================
+    // REST API CLIENT (CONNECTS TO NODE.JS & SQLITE)
+    // ==========================================
+    const isNodeBackend = window.location.protocol.startsWith('http');
+    
+    const api = {
+      getToken: () => localStorage.getItem('ordercenter_token'),
+      setToken: (t) => localStorage.setItem('ordercenter_token', t),
+      clearToken: () => localStorage.removeItem('ordercenter_token'),
+      
+      headers: () => ({
+        'Content-Type': 'application/json',
+        ...(localStorage.getItem('ordercenter_token') ? { 'Authorization': `Bearer ${localStorage.getItem('ordercenter_token')}` } : {})
+      }),
+
+      async login(username, password) {
+        if (!isNodeBackend) {
+          // Fallback if opened directly via file://
+          const savedUsers = JSON.parse(localStorage.getItem('ordercenter_users') || '[]');
+          const user = savedUsers.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+          if (!user) throw new Error('Account not found.');
+          if (!user.active) throw new Error('Account is suspended.');
+          const passwords = JSON.parse(localStorage.getItem('ordercenter_passwords') || '{}');
+          if (password !== (passwords[user.username] || 'admin123')) throw new Error('Incorrect password.');
+          return { token: 'mock_token', user };
+        }
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+        this.setToken(data.token);
+        return data;
+      },
+
+      async getMe() {
+        if (!isNodeBackend) return JSON.parse(localStorage.getItem('ordercenter_session') || 'null');
+        const token = this.getToken();
+        if (!token) return null;
+        try {
+          const res = await fetch('/api/auth/me', { headers: this.headers() });
+          if (!res.ok) { this.clearToken(); return null; }
+          const data = await res.json();
+          return data.user;
+        } catch (e) {
+          return null;
+        }
+      },
+
+      async logout() {
+        if (isNodeBackend) {
+          await fetch('/api/auth/logout', { method: 'POST', headers: this.headers() }).catch(() => {});
+        }
+        this.clearToken();
+      },
+
+      async getTransactions() {
+        if (!isNodeBackend) return JSON.parse(localStorage.getItem('ordercenter_erp_v1_txs') || '[]');
+        const res = await fetch('/api/transactions', { headers: this.headers() });
+        const data = await res.json();
+        return data.transactions || [];
+      },
+
+      async createTransaction(tx) {
+        if (!isNodeBackend) {
+          const txs = JSON.parse(localStorage.getItem('ordercenter_erp_v1_txs') || '[]');
+          const newTx = { ...tx, id: 'tx_' + Date.now(), createdAt: new Date().toISOString() };
+          localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([newTx, ...txs]));
+          return newTx;
+        }
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify(tx)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create transaction');
+        return data.transaction;
+      },
+
+      async updateTransaction(id, tx) {
+        if (!isNodeBackend) {
+          const txs = JSON.parse(localStorage.getItem('ordercenter_erp_v1_txs') || '[]');
+          const updated = txs.map(t => t.id === id ? { ...t, ...tx } : t);
+          localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(updated));
+          return tx;
+        }
+        const res = await fetch(`/api/transactions/${id}`, {
+          method: 'PUT',
+          headers: this.headers(),
+          body: JSON.stringify(tx)
+        });
+        const data = await res.json();
+        return data.transaction;
+      },
+
+      async deleteTransaction(id) {
+        if (!isNodeBackend) {
+          const txs = JSON.parse(localStorage.getItem('ordercenter_erp_v1_txs') || '[]');
+          localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(txs.filter(t => t.id !== id)));
+          return true;
+        }
+        await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: this.headers() });
+        return true;
+      },
+
+      async clearAllTransactions() {
+        if (!isNodeBackend) {
+          localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([]));
+          return true;
+        }
+        await fetch('/api/transactions/clear-all', { method: 'POST', headers: this.headers() });
+        return true;
+      },
+
+      async getBalances() {
+        if (!isNodeBackend) return JSON.parse(localStorage.getItem('ordercenter_opening_balances') || '{"fib":0,"cihan":0,"qi":0,"hyperpost":0,"cash":0}');
+        const res = await fetch('/api/balances', { headers: this.headers() });
+        const data = await res.json();
+        return data.balances;
+      },
+
+      async setBalances(balances) {
+        if (!isNodeBackend) {
+          localStorage.setItem('ordercenter_opening_balances', JSON.stringify(balances));
+          return balances;
+        }
+        const res = await fetch('/api/balances', {
+          method: 'PUT',
+          headers: this.headers(),
+          body: JSON.stringify(balances)
+        });
+        const data = await res.json();
+        return data.balances;
+      },
+
+      async getUsers() {
+        if (!isNodeBackend) return JSON.parse(localStorage.getItem('ordercenter_users') || '[]');
+        const res = await fetch('/api/users', { headers: this.headers() });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.users || [];
+      },
+
+      async createUser(userData) {
+        if (!isNodeBackend) {
+          const users = JSON.parse(localStorage.getItem('ordercenter_users') || '[]');
+          const newUser = { id: 'usr_' + Date.now(), ...userData, role: 'user', active: 1, createdAt: new Date().toISOString().split('T')[0] };
+          users.push(newUser);
+          localStorage.setItem('ordercenter_users', JSON.stringify(users));
+          return newUser;
+        }
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify(userData)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create user');
+        return data.user;
+      },
+
+      async toggleUserStatus(id, active) {
+        if (!isNodeBackend) {
+          const users = JSON.parse(localStorage.getItem('ordercenter_users') || '[]');
+          const updated = users.map(u => u.id === id ? { ...u, active: active ? 1 : 0 } : u);
+          localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+          return true;
+        }
+        await fetch(`/api/users/${id}/status`, {
+          method: 'PATCH',
+          headers: this.headers(),
+          body: JSON.stringify({ active })
+        });
+        return true;
+      },
+
+      async resetPassword(userId, newPassword) {
+        if (!isNodeBackend) return true;
+        const res = await fetch(`/api/users/${userId}/password`, {
+          method: 'PUT',
+          headers: this.headers(),
+          body: JSON.stringify({ newPassword })
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.error || 'Failed to reset password');
+        }
+        return true;
+      },
+
+      async deleteUser(id) {
+        if (!isNodeBackend) {
+          const users = JSON.parse(localStorage.getItem('ordercenter_users') || '[]');
+          localStorage.setItem('ordercenter_users', JSON.stringify(users.filter(u => u.id !== id)));
+          return true;
+        }
+        await fetch(`/api/users/${id}`, { method: 'DELETE', headers: this.headers() });
+        return true;
+      }
+    };
+
+    // ==========================================
+    // AUTHENTICATION & LOGIN SCREEN COMPONENT
+    // ==========================================
+    function LoginScreen({ users, userPasswords, onLogin }) {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [showPassword, setShowPassword] = useState(false);
+      const [error, setError] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        try {
+          const result = await api.login(username, password);
+          setIsLoading(false);
+          onLogin(result.user);
+        } catch (err) {
+          setError(err.message || 'Authentication failed. Please check your credentials.');
+          setIsLoading(false);
+        }
+      };
+
+      
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#350705] to-slate-950 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+          {/* Ambient Brand Glows */}
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#711612]/30 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-10 right-10 w-72 h-72 bg-[#AB7431]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="w-full max-w-md relative z-10">
+            {/* Brand Logo & Header */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] text-white shadow-2xl shadow-[#711612]/40 mb-4 border border-white/10">
+                <Icon name="shield" className="w-8 h-8" />
+              </div>
+              <h1 className="text-3xl font-black text-white tracking-tight">Order Center</h1>
+              <p className="text-xs font-bold tracking-widest text-slate-300 uppercase mt-1">
+                Global Shopping & Shipping
+              </p>
+              <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-white/90 text-xs font-semibold backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-[#AB7431] animate-pulse"></span>
+                <span>Treasury & Financial Operations ERP</span>
+              </div>
+            </div>
+
+            {/* Login Card */}
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+              <div className="mb-6">
+                <h2 className="text-xl font-black text-slate-900">Sign In</h2>
+                <p className="text-xs text-slate-500 mt-1">Enter your credentials to access the financial portal</p>
+              </div>
+
+              {error && (
+                <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2.5">
+                  <Icon name="alert-circle" className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Username or Email</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="user" className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. admin or username"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#711612] focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="lock" className="w-4 h-4" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#711612] focus:bg-white transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                    >
+                      <Icon name={showPassword ? 'eye-off' : 'eye'} className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/30 transition transform active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <Icon name="log-in" className="w-4 h-4" />
+                        <span>Sign In to Dashboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              </div>
+            <p className="text-center text-xs text-slate-400 mt-6 font-medium">
+              Order Center ERP · Secure Corporate Financial Management
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      // Language State (Permanently English - Kurdish removed)
+
+      // Sync with Node.js & SQLite Database on Mount
+      useEffect(() => {
+        async function loadServerData() {
+          try {
+            const me = await api.getMe();
+            if (me) {
+              setCurrentUser(me);
+              const [serverTxs, serverBalances] = await Promise.all([
+                api.getTransactions(),
+                api.getBalances()
+              ]);
+              setTransactions(serverTxs);
+              setOpeningBalances(serverBalances);
+
+              if (me.role === 'admin') {
+                const serverUsers = await api.getUsers();
+                if (serverUsers && serverUsers.length > 0) setUsers(serverUsers);
+              }
+            }
+          } catch (e) {
+            console.warn('[Sync] Falling back to local data store:', e);
+          }
+        }
+        loadServerData();
+      }, []);
+
+      const lang = 'en';
+      const t = TRANSLATIONS.en;
+      const isRtl = false;
+
+      // Authentication & Users State
+      const [users, setUsers] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_users');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              // Ensure admin is named Wazham and has admin role
+              const updated = parsed.map(u => u.username === 'admin' ? { ...u, name: 'Wazham', role: 'admin', partner: 'Wazham' } : u);
+              localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+              return updated;
+            }
+          } catch (e) {}
+        }
+        const defaultUsers = [
+          { id: 'usr_admin', name: 'Wazham', username: 'admin', role: 'admin', partner: 'Wazham', createdAt: '2026-01-01', active: true },
+          { id: 'usr_staff', name: 'Staff User', username: 'user', role: 'user', partner: 'Staff', createdAt: '2026-01-15', active: true }
+        ];
+        localStorage.setItem('ordercenter_users', JSON.stringify(defaultUsers));
+        return defaultUsers;
+      });
+
+      const [userPasswords, setUserPasswords] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_passwords');
+        if (saved) {
+          try { return JSON.parse(saved); } catch (e) {}
+        }
+        return {
+          admin: 'admin123',
+          wazham: 'wazham123',
+          user: 'user123'
+        };
+      });
+
+      const [currentUser, setCurrentUser] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_session');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && (parsed.username === 'admin' || parsed.role === 'admin')) {
+              const updatedAdmin = { ...parsed, name: 'Wazham', role: 'admin', partner: 'Wazham' };
+              localStorage.setItem('ordercenter_session', JSON.stringify(updatedAdmin));
+              return updatedAdmin;
+            }
+            return parsed;
+          } catch (e) {}
+        }
+        return null;
+      });
+
+      // Modals for User Management
+      const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+      const [newUserForm, setNewUserForm] = useState({
+        name: '',
+        username: '',
+        password: '',
+        role: 'user',
+        partner: 'Staff'
+      });
+      const [resetPasswordModal, setResetPasswordModal] = useState({
+        isOpen: false,
+        username: '',
+        name: '',
+        newPassword: ''
+      });
+
+      const handleLogout = () => {
+        setConfirmDialog({
+          title: 'Sign Out Confirmation',
+          message: 'Are you sure you want to log out of the Order Center portal?',
+          confirmLabel: 'Yes, Sign Out',
+          confirmColor: 'bg-[#711612] hover:bg-[#5A0E0B]',
+          onConfirm: async () => {
+            if (typeof api !== 'undefined' && api.logout) {
+              await api.logout();
+            }
+            setCurrentUser(null);
+            localStorage.removeItem('ordercenter_session');
+            localStorage.removeItem('ordercenter_token');
+            triggerToast('Signed out successfully.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      const handleAddUser = (e) => {
+        e.preventDefault();
+        const trimmedUsername = newUserForm.username.trim().toLowerCase();
+        if (!trimmedUsername || !newUserForm.name.trim() || !newUserForm.password.trim()) {
+          triggerToast('Please fill in all required fields.');
+          return;
+        }
+
+        if (users.some(u => u.username.toLowerCase() === trimmedUsername)) {
+          triggerToast('Username is already taken. Please choose another.');
+          return;
+        }
+
+        const newUser = {
+          id: 'usr_' + Date.now(),
+          name: newUserForm.name.trim(),
+          username: trimmedUsername,
+          role: 'user',
+          partner: newUserForm.partner,
+          createdAt: new Date().toISOString().split('T')[0],
+          active: true
+        };
+
+        const updatedUsers = [...users, newUser];
+        const updatedPasswords = { ...userPasswords, [trimmedUsername]: newUserForm.password.trim() };
+
+        setUsers(updatedUsers);
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('ordercenter_users', JSON.stringify(updatedUsers));
+        localStorage.setItem('ordercenter_passwords', JSON.stringify(updatedPasswords));
+
+        setIsAddUserModalOpen(false);
+        setNewUserForm({ name: '', username: '', password: '', role: 'user', partner: 'Staff' });
+        triggerToast(`User "${newUser.name}" added successfully as ${newUser.role.toUpperCase()}!`);
+      };
+
+      const handleToggleUserStatus = (userId) => {
+        const target = users.find(u => u.id === userId);
+        if (!target) return;
+        if (target.id === currentUser?.id) {
+          triggerToast('You cannot deactivate your own current account.');
+          return;
+        }
+
+        const updated = users.map(u => u.id === userId ? { ...u, active: !u.active } : u);
+        setUsers(updated);
+        localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+        triggerToast(`User ${target.name} is now ${!target.active ? 'Active' : 'Suspended'}.`);
+      };
+
+      const handleDeleteUser = (userId) => {
+        const target = users.find(u => u.id === userId);
+        if (!target) return;
+        if (target.id === currentUser?.id) {
+          triggerToast('You cannot delete your own account while signed in.');
+          return;
+        }
+
+        setConfirmDialog({
+          title: 'Delete User Account',
+          message: `Are you sure you want to permanently delete the account for "${target.name}" (@${target.username})? This user will no longer be able to sign in.`,
+          confirmLabel: 'Yes, Delete User',
+          confirmColor: 'bg-rose-600 hover:bg-rose-700',
+          onConfirm: () => {
+            const updated = users.filter(u => u.id !== userId);
+            setUsers(updated);
+            localStorage.setItem('ordercenter_users', JSON.stringify(updated));
+            triggerToast(`User ${target.name} removed.`);
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      const handleSaveNewPassword = (e) => {
+        e.preventDefault();
+        if (!resetPasswordModal.newPassword.trim()) {
+          triggerToast('Please provide a valid new password.');
+          return;
+        }
+
+        const updatedPasswords = { ...userPasswords, [resetPasswordModal.username]: resetPasswordModal.newPassword.trim() };
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('ordercenter_passwords', JSON.stringify(updatedPasswords));
+        triggerToast(`Password for @${resetPasswordModal.username} updated successfully.`);
+        setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' });
+      };
+
+
+      useEffect(() => {
+        document.documentElement.dir = 'ltr';
+        document.documentElement.lang = 'en';
+      }, []);
+
+      // Transactions Store (Fresh, clean start)
+      const [transactions, setTransactions] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_erp_v1_txs');
+        if (!saved) return [];
+        try {
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          return [];
+        }
+      });
+
+      // Opening Starting Balances for all 5 accounts (Stored in localStorage)
+      const [openingBalances, setOpeningBalances] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_opening_balances');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch (e) {}
+        }
+        return { fib: 0, cihan: 0, qi: 0, hyperpost: 0, cash: 0 };
+      });
+
+      // Editable Opening Balances temporary form state for Settings Tab
+      const [openingForm, setOpeningForm] = useState(openingBalances);
+
+      // USD Exchange Rate
+      const [exchangeRate, setExchangeRate] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_usd_rate');
+        return saved ? Number(saved) : 1500;
+      });
+
+      // Current active tab: 'dashboard' | 'transactions' | 'partners' | 'analytics' | 'settings'
+      const [activeTab, setActiveTab] = useState('dashboard');
+
+      // Filters
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
+      const [selectedPartnerFilter, setSelectedPartnerFilter] = useState('all');
+      const [selectedTypeFilter, setSelectedTypeFilter] = useState('all');
+      const [dateFilter, setDateFilter] = useState('all');
+
+      // Modals
+      const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+      const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+      const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
+      const [editingTx, setEditingTx] = useState(null);
+      const [toastMessage, setToastMessage] = useState(null);
+      const [confirmDialog, setConfirmDialog] = useState(null);
+
+      // Form States
+      const [txForm, setTxForm] = useState({
+        type: 'income',
+        amount: '',
+        currency: 'IQD',
+        accountId: 'fib',
+        toAccountId: 'cash',
+        partner: 'Sarwar',
+        category: TRANSACTION_CATEGORIES.income[0],
+        refNumber: '',
+        notes: '',
+        date: new Date().toISOString().slice(0, 16)
+      });
+
+      const [transferForm, setTransferForm] = useState({
+        amount: '',
+        currency: 'IQD',
+        fromAccountId: 'cash',
+        toAccountId: 'cihan',
+        partner: 'Sarwar',
+        notes: 'Account balance rebalancing',
+        date: new Date().toISOString().slice(0, 16)
+      });
+
+      const [equityRatio, setEquityRatio] = useState({ Sarwar: 50, Wazham: 50 });
+
+      // Save transactions to localStorage
+      useEffect(() => {
+        localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(transactions));
+      }, [transactions]);
+
+      // Save opening balances to localStorage
+      useEffect(() => {
+        localStorage.setItem('ordercenter_opening_balances', JSON.stringify(openingBalances));
+        setOpeningForm(openingBalances);
+      }, [openingBalances]);
+
+      // Save USD rate to localStorage
+      useEffect(() => {
+        localStorage.setItem('ordercenter_usd_rate', exchangeRate.toString());
+      }, [exchangeRate]);
+
+      // Toast Notification
+      const triggerToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3500);
+      };
+
+      // Currency Helpers
+      const toIQD = (amount, currency) => {
+        const val = Number(amount) || 0;
+        return currency === 'USD' ? val * exchangeRate : val;
+      };
+
+      const formatIQD = (val) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'IQD',
+          maximumFractionDigits: 0
+        }).format(val || 0).replace('IQD', lang === 'ku' ? 'د.ع' : 'IQD');
+      };
+
+      const formatUSD = (val) => {
+        const usd = (val || 0) / (exchangeRate || 1500);
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(usd);
+      };
+
+      // Calculate Net Balances for all 5 accounts (Opening Balance + Transactions)
+      const accountBalances = useMemo(() => {
+        const balances = { 
+          fib: Number(openingBalances.fib) || 0, 
+          cihan: Number(openingBalances.cihan) || 0, 
+          qi: Number(openingBalances.qi) || 0, 
+          hyperpost: Number(openingBalances.hyperpost) || 0, 
+          cash: Number(openingBalances.cash) || 0 
+        };
+
+        transactions.forEach((tx) => {
+          const amtIQD = toIQD(tx.amount, tx.currency);
+          if (tx.type === 'income') {
+            balances[tx.accountId] = (balances[tx.accountId] || 0) + amtIQD;
+          } else if (tx.type === 'expense' || tx.type === 'withdrawal') {
+            balances[tx.accountId] = (balances[tx.accountId] || 0) - amtIQD;
+          } else if (tx.type === 'transfer') {
+            balances[tx.accountId] = (balances[tx.accountId] || 0) - amtIQD;
+            if (tx.toAccountId) {
+              balances[tx.toAccountId] = (balances[tx.toAccountId] || 0) + amtIQD;
+            }
+          }
+        });
+        return balances;
+      }, [transactions, openingBalances, exchangeRate]);
+
+      // Total Liquidity
+      const totalConsolidatedLiquidity = useMemo(() => {
+        return Object.values(accountBalances).reduce((acc, curr) => acc + curr, 0);
+      }, [accountBalances]);
+
+      // Metrics & Analytics
+      const metrics = useMemo(() => {
+        let totalRevenue = 0;
+        let totalExpenses = 0;
+        let partnerWithdrawals = { Sarwar: 0, Wazham: 0 };
+        let partnerLoans = { Sarwar: 0, Wazham: 0 };
+
+        transactions.forEach((tx) => {
+          const amtIQD = toIQD(tx.amount, tx.currency);
+          const cat = (tx.category || '').toLowerCase();
+          const isLoan = cat.includes('loan') || cat.includes('advance');
+
+          if (tx.type === 'withdrawal') {
+            if (isLoan) {
+              if (partnerLoans[tx.partner] !== undefined) {
+                partnerLoans[tx.partner] += amtIQD;
+              }
+            } else {
+              if (partnerWithdrawals[tx.partner] !== undefined) {
+                partnerWithdrawals[tx.partner] += amtIQD;
+              }
+            }
+          } else if (tx.type === 'income' && isLoan) {
+            if (partnerLoans[tx.partner] !== undefined) {
+              partnerLoans[tx.partner] = Math.max(0, partnerLoans[tx.partner] - amtIQD);
+            }
+          } else if (tx.type === 'income') {
+            totalRevenue += amtIQD;
+          } else if (tx.type === 'expense') {
+            totalExpenses += amtIQD;
+          }
+        });
+
+        const netProfit = totalRevenue - totalExpenses;
+        const totalDrawings = partnerWithdrawals.Sarwar + partnerWithdrawals.Wazham;
+        const totalLoans = partnerLoans.Sarwar + partnerLoans.Wazham;
+        const netRetained = netProfit - totalDrawings - totalLoans;
+
+        return {
+          totalRevenue,
+          totalExpenses,
+          netProfit,
+          netRetained,
+          partnerWithdrawals,
+          partnerLoans
+        };
+      }, [transactions, exchangeRate]);
+
+      // Filtered Transactions
+      const filteredTransactions = useMemo(() => {
+        return transactions.filter((tx) => {
+          const searchMatch = 
+            (tx.notes || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (tx.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (tx.refNumber && tx.refNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (tx.amount || '').toString().includes(searchQuery);
+
+          const accountMatch = 
+            selectedAccountFilter === 'all' || 
+            tx.accountId === selectedAccountFilter || 
+            tx.toAccountId === selectedAccountFilter;
+
+          const partnerMatch = 
+            selectedPartnerFilter === 'all' || 
+            tx.partner === selectedPartnerFilter;
+
+          const typeMatch = 
+            selectedTypeFilter === 'all' || 
+            tx.type === selectedTypeFilter;
+
+          let dateMatch = true;
+          if (dateFilter !== 'all') {
+            const txDate = new Date(tx.date);
+            const now = new Date();
+            if (dateFilter === 'today') {
+              dateMatch = txDate.toDateString() === now.toDateString();
+            } else if (dateFilter === 'week') {
+              const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              dateMatch = txDate >= weekAgo;
+            } else if (dateFilter === 'month') {
+              dateMatch = txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+            }
+          }
+
+          return searchMatch && accountMatch && partnerMatch && typeMatch && dateMatch;
+        }).sort((a, b) => new Date(b.date) - new Date(a.date));
+      }, [transactions, searchQuery, selectedAccountFilter, selectedPartnerFilter, selectedTypeFilter, dateFilter]);
+
+      // Category breakdown
+      const categoryBreakdown = useMemo(() => {
+        const incomeCats = {};
+        const expenseCats = {};
+        transactions.forEach((tx) => {
+          const amt = toIQD(tx.amount, tx.currency);
+          if (tx.type === 'income') {
+            incomeCats[tx.category] = (incomeCats[tx.category] || 0) + amt;
+          } else if (tx.type === 'expense') {
+            expenseCats[tx.category] = (expenseCats[tx.category] || 0) + amt;
+          }
+        });
+        return { incomeCats, expenseCats };
+      }, [transactions, exchangeRate]);
+
+      // Action Handlers
+      const handleSaveTransaction = (e) => {
+        e.preventDefault();
+        if (!txForm.amount || Number(txForm.amount) <= 0) return;
+
+        const newTx = {
+          id: editingTx ? editingTx.id : `TX-${Date.now().toString().slice(-5)}`,
+          refNumber: txForm.refNumber.trim() || `REF-${Math.floor(1000 + Math.random() * 9000)}`,
+          type: txForm.type,
+          amount: Number(txForm.amount),
+          currency: txForm.currency,
+          accountId: txForm.accountId,
+          toAccountId: txForm.type === 'transfer' ? txForm.toAccountId : null,
+          partner: txForm.partner,
+          category: txForm.category,
+          notes: txForm.notes.trim() || (lang === 'ku' ? 'هیچ تێبینییەک نەنووسراوە' : 'No memo provided.'),
+          date: txForm.date
+        };
+
+        if (editingTx) {
+          setTransactions((prev) => prev.map((t) => (t.id === editingTx.id ? newTx : t)));
+          triggerToast(lang === 'ku' ? 'تۆمارەکە نوێکرایەوە' : 'Transaction updated!');
+        } else {
+          setTransactions((prev) => [newTx, ...prev]);
+          triggerToast(lang === 'ku' ? 'جووڵەی دارایی نوێ تۆمارکرا' : 'Transaction logged!');
+        }
+        closeTxModal();
+      };
+
+      const handleSaveTransfer = (e) => {
+        e.preventDefault();
+        if (!transferForm.amount || Number(transferForm.amount) <= 0) return;
+        if (transferForm.fromAccountId === transferForm.toAccountId) {
+          triggerToast(lang === 'ku' ? 'هەژماری سەرچاوە و مەبەست دەبێت جیاواز بن' : 'Accounts must be different.');
+          return;
+        }
+
+        const newTx = {
+          id: `TX-${Date.now().toString().slice(-5)}`,
+          refNumber: `TR-${Math.floor(1000 + Math.random() * 9000)}`,
+          type: 'transfer',
+          amount: Number(transferForm.amount),
+          currency: transferForm.currency,
+          accountId: transferForm.fromAccountId,
+          toAccountId: transferForm.toAccountId,
+          partner: transferForm.partner,
+          category: 'Internal Account Rebalance',
+          notes: transferForm.notes.trim() || (lang === 'ku' ? 'گواستنەوەی نێوان هەژمارەکان' : 'Internal liquidity transfer.'),
+          date: transferForm.date
+        };
+
+        setTransactions((prev) => [newTx, ...prev]);
+        setIsTransferModalOpen(false);
+        triggerToast(lang === 'ku' 
+          ? `پارە گوازرایەوە لە ${ACCOUNTS[newTx.accountId].shortNameKu} بۆ ${ACCOUNTS[newTx.toAccountId].shortNameKu}` 
+          : `Transferred from ${ACCOUNTS[newTx.accountId].shortName} to ${ACCOUNTS[newTx.toAccountId].shortName}!`);
+      };
+
+      const openNewTxModal = (type = 'income', partner = 'Sarwar', category = null) => {
+        setEditingTx(null);
+        setTxForm({
+          type,
+          amount: '',
+          currency: 'IQD',
+          accountId: 'fib',
+          toAccountId: 'cash',
+          partner: partner || 'Sarwar',
+          category: category || ((TRANSACTION_CATEGORIES[type] && TRANSACTION_CATEGORIES[type][0]) || 'General'),
+          refNumber: '',
+          notes: '',
+          date: new Date().toISOString().slice(0, 16)
+        });
+        setIsTxModalOpen(true);
+      };
+
+      const openEditTxModal = (tx) => {
+        setEditingTx(tx);
+        setTxForm({
+          type: tx.type,
+          amount: tx.amount,
+          currency: tx.currency || 'IQD',
+          accountId: tx.accountId,
+          toAccountId: tx.toAccountId || 'cash',
+          partner: tx.partner,
+          category: tx.category,
+          refNumber: tx.refNumber || '',
+          notes: tx.notes,
+          date: tx.date
+        });
+        setIsTxModalOpen(true);
+      };
+
+      const closeTxModal = () => {
+        setIsTxModalOpen(false);
+        setEditingTx(null);
+      };
+
+      const handleDeleteTx = (id) => {
+        setConfirmDialog({
+          title: t.deleteModalTitle,
+          message: t.deleteModalMessage,
+          confirmLabel: t.deleteConfirm,
+          confirmColor: 'bg-rose-600 hover:bg-rose-700',
+          onConfirm: () => {
+            setTransactions((prev) => prev.filter((t) => t.id !== id));
+            triggerToast(lang === 'ku' ? 'تۆمارەکە سڕایەوە' : 'Transaction removed.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      // Wipe only transactions (keeps opening balances intact)
+      const handleClearAllTransactions = () => {
+        setConfirmDialog({
+          title: lang === 'ku' ? 'سڕینەوەی هەموو جووڵە داراییەکان' : 'Clear All Transaction Records',
+          message: lang === 'ku' 
+            ? 'ئایا دڵنیایت لە سڕینەوەی هەموو تۆمارەکان؟ هەموو داهات، خەرجی و گواستنەوەکان دەسڕێنەوە، بەڵام باڵانسی سەرەتایی هەژمارەکان وەک خۆی دەمێنێتەوە.' 
+            : 'Are you sure you want to clear all transaction records? Opening balances will be preserved.',
+          confirmLabel: lang === 'ku' ? 'بەڵێ، هەمووی بسڕەوە' : 'Yes, Wipe Records',
+          confirmColor: 'bg-rose-600 hover:bg-rose-700',
+          onConfirm: () => {
+            setTransactions([]);
+            localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([]));
+            triggerToast(lang === 'ku' ? 'تەواوی جووڵە داراییەکان سڕانەوە' : 'All transactions wiped.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      // Full system reset: zero out opening balances + zero out transactions
+      const handleResetEverything = () => {
+        setConfirmDialog({
+          title: lang === 'ku' ? 'سفرکردنەوەی تەواوەتی سیستەم' : 'Full System Factory Reset',
+          message: lang === 'ku' 
+            ? 'ئاگاداربە! ئەم کردارە هەموو باڵانسی سەرەتایی هەژمارەکان دەکاتە ٠ و هەموو تۆمارەکانیش بە تەواوی دەسڕێتەوە. هیچ داتایەک ناگەڕێتەوە.' 
+            : 'Warning! This will zero out all opening account balances and delete all logged transactions. This cannot be undone.',
+          confirmLabel: lang === 'ku' ? 'سفرکردنەوەی گشتی' : 'Reset Everything to 0',
+          confirmColor: 'bg-red-700 hover:bg-red-800',
+          onConfirm: () => {
+            setTransactions([]);
+            const zeros = { fib: 0, cihan: 0, qi: 0, hyperpost: 0, cash: 0 };
+            setOpeningBalances(zeros);
+            setOpeningForm(zeros);
+            localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([]));
+            localStorage.setItem('ordercenter_opening_balances', JSON.stringify(zeros));
+            triggerToast(lang === 'ku' ? 'سیستەمەکە بە تەواوی سفر کرایەوە' : 'System reset to zero.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
+      // Save Opening Balances from Settings Tab
+      const handleSaveOpeningBalances = (e) => {
+        e.preventDefault();
+        const updated = {
+          fib: Math.max(0, Number(openingForm.fib) || 0),
+          cihan: Math.max(0, Number(openingForm.cihan) || 0),
+          qi: Math.max(0, Number(openingForm.qi) || 0),
+          hyperpost: Math.max(0, Number(openingForm.hyperpost) || 0),
+          cash: Math.max(0, Number(openingForm.cash) || 0)
+        };
+        setOpeningBalances(updated);
+        triggerToast(lang === 'ku' ? 'باڵانسی سەرەتایی هەژمارەکان پاشەکەوت کرا' : 'Opening balances saved successfully!');
+      };
+
+      const exportCSV = () => {
+        const headers = ['Ref #', 'Date & Time', 'Type', 'Amount', 'Currency', 'Amount (IQD)', 'Source Account', 'Destination Account', 'Partner / User', 'Category', 'Notes'];
+        const rows = filteredTransactions.map((tx) => [
+          tx.refNumber || tx.id,
+          tx.date.replace('T', ' '),
+          tx.type.toUpperCase(),
+          tx.amount,
+          tx.currency,
+          toIQD(tx.amount, tx.currency),
+          ACCOUNTS[tx.accountId]?.name || tx.accountId,
+          tx.toAccountId ? ACCOUNTS[tx.toAccountId]?.name : 'N/A',
+          tx.partner,
+          `"${tx.category}"`,
+          `"${tx.notes.replace(/"/g, '""')}"`
+        ]);
+
+        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `OrderCenter_ERP_Ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        triggerToast(lang === 'ku' ? 'فایلی CSV دابەزی' : 'Ledger exported to CSV.');
+      };
+
+      const partnerSettlement = useMemo(() => {
+        const netProf = metrics.netProfit;
+        const sarwarShareRatio = equityRatio.Sarwar / 100;
+        const wazhamShareRatio = equityRatio.Wazham / 100;
+
+        const sarwarEntitled = netProf * sarwarShareRatio;
+        const wazhamEntitled = netProf * wazhamShareRatio;
+
+        const sarwarWithdrawn = metrics.partnerWithdrawals.Sarwar;
+        const wazhamWithdrawn = metrics.partnerWithdrawals.Wazham;
+
+        const sarwarLoan = metrics.partnerLoans.Sarwar;
+        const wazhamLoan = metrics.partnerLoans.Wazham;
+
+        const sarwarNetDue = sarwarEntitled - sarwarWithdrawn - sarwarLoan;
+        const wazhamNetDue = wazhamEntitled - wazhamWithdrawn - wazhamLoan;
+
+        return {
+          sarwarEntitled,
+          wazhamEntitled,
+          sarwarWithdrawn,
+          wazhamWithdrawn,
+          sarwarLoan,
+          wazhamLoan,
+          sarwarNetDue,
+          wazhamNetDue
+        };
+      }, [metrics, equityRatio]);
+
+      // Helper for Account Name based on language
+      const getAccountName = (acc) => (lang === 'ku' ? acc.nameKu : acc.name);
+      const getAccountShortName = (acc) => (lang === 'ku' ? acc.shortNameKu : acc.shortName);
+      const getPartnerName = (p) => (p === 'Sarwar' ? (lang === 'ku' ? 'سەروەر' : 'Sarwar') : (lang === 'ku' ? 'واژام' : 'Wazham'));
+
+      if (!currentUser) {
+        return (
+          <LoginScreen
+            users={users}
+            userPasswords={userPasswords}
+            onLogin={(user) => {
+              setCurrentUser(user);
+              localStorage.setItem('ordercenter_session', JSON.stringify(user));
+              triggerToast(`Welcome back, ${user.name}!`);
+            }}
+          />
+        );
+      }
+
+
+      return (
+        <div className={`min-h-screen ${isRtl ? 'font-nrt' : ''}`}>
+          
+          {/* ===================== DEDICATED A4 PRINT STATEMENT (VISIBLE ONLY ON PRINT) ===================== */}
+          <section className="print-only-statement p-2">
+            {/* Header / Letterhead */}
+            <div className="flex items-start justify-between pb-4 border-b-2 border-slate-900 mb-4">
+              <div>
+                <h1 className="text-2xl font-black text-slate-950 uppercase tracking-tight">Order Center</h1>
+                <p className="text-sm font-bold text-slate-700 mt-0.5">
+                  {lang === 'ku' ? 'ڕاپۆرتی فەرمی دارایی و خەزێنە' : 'Official Treasury & Financial Statement'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {lang === 'ku' ? 'بەرواری دەرکردن:' : 'Generated Date:'} {new Date().toLocaleString(lang === 'ku' ? 'ckb-IQ' : 'en-US')}
+                </p>
+              </div>
+              <div className={isRtl ? 'text-left' : 'text-right'}>
+                <span className="text-xs uppercase font-extrabold px-2.5 py-1 bg-slate-100 border border-slate-300 rounded text-slate-800">
+                  A4 Executive Audit
+                </span>
+                <p className="text-xs text-slate-600 mt-2">
+                  {lang === 'ku' ? 'پشکی هاوبەشەکان: سەروەر (٥٠٪) • واژام (٥٠٪)' : 'Partners: Sarwar (50%) • Wazham (50%)'}
+                </p>
+              </div>
+            </div>
+
+            {/* Financial Snapshot Summary Cards */}
+            <div className="grid grid-cols-4 gap-3 mb-5 print-card">
+              <div className="p-3 border border-slate-300 rounded-lg bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{t.totalLiquidity}</span>
+                <div className="text-base font-black text-slate-900 mt-0.5">{formatIQD(totalConsolidatedLiquidity)}</div>
+                <div className="text-[10px] text-slate-500 font-semibold">≈ {formatUSD(totalConsolidatedLiquidity)}</div>
+              </div>
+              <div className="p-3 border border-slate-300 rounded-lg bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{t.totalRevenue}</span>
+                <div className="text-base font-black text-emerald-700 mt-0.5">+{formatIQD(metrics.totalRevenue)}</div>
+              </div>
+              <div className="p-3 border border-slate-300 rounded-lg bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{t.totalExpenses}</span>
+                <div className="text-base font-black text-rose-700 mt-0.5">-{formatIQD(metrics.totalExpenses)}</div>
+              </div>
+              <div className="p-3 border border-slate-300 rounded-lg bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{t.netProfit}</span>
+                <div className="text-base font-black text-indigo-900 mt-0.5">{formatIQD(metrics.netProfit)}</div>
+              </div>
+            </div>
+
+            {/* 5 Accounts Balance Breakdown */}
+            <div className="mb-5 border border-slate-300 rounded-lg p-3 print-card bg-white">
+              <h4 className="text-xs font-black uppercase text-slate-700 mb-2">
+                {lang === 'ku' ? 'دابەشبوونی نەختینە بەسەر ٥ هەژمارەکەدا' : '5 Account Liquidity Distribution'}
+              </h4>
+              <div className="grid grid-cols-5 gap-2 text-center">
+                {Object.values(ACCOUNTS).map((acc) => (
+                  <div key={acc.id} className="p-2 border border-slate-200 rounded bg-slate-50">
+                    <span className="text-[10px] font-bold text-slate-600 block">{getAccountShortName(acc)}</span>
+                    <span className="text-xs font-black text-slate-900 mt-0.5 block">{formatIQD(accountBalances[acc.id] || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter Scope Note */}
+            <div className="mb-2 text-xs font-bold text-slate-600 flex items-center justify-between">
+              <span>
+                {lang === 'ku' ? 'تۆماری جووڵە داراییەکان (تۆمارە فلتەرکراوەکان):' : 'General Ledger Records (Filtered Scope):'} {filteredTransactions.length} {lang === 'ku' ? 'جووڵە' : 'records'}
+              </span>
+              <span>{t.exchangeRateNote} {exchangeRate} IQD</span>
+            </div>
+
+            {/* Ledger Table for Print */}
+            <table className="w-full text-xs text-slate-900 border border-slate-300">
+              <thead>
+                <tr className="bg-slate-200 text-slate-800 text-[10px] uppercase font-black text-start">
+                  <th className="p-2 border-b border-slate-400">#</th>
+                  <th className="p-2 border-b border-slate-400">{t.colRefDate}</th>
+                  <th className="p-2 border-b border-slate-400">{t.colType}</th>
+                  <th className="p-2 border-b border-slate-400">{t.colAccountFlow}</th>
+                  <th className="p-2 border-b border-slate-400">{t.colCategory}</th>
+                  <th className="p-2 border-b border-slate-400">{t.colPartner}</th>
+                  <th className="p-2 border-b border-slate-400">{t.colNotes}</th>
+                  <th className={`p-2 border-b border-slate-400 ${isRtl ? 'text-left' : 'text-right'}`}>{t.colAmount}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.map((tx, idx) => {
+                  const amtIQD = toIQD(tx.amount, tx.currency);
+                  const fromAcc = ACCOUNTS[tx.accountId];
+                  const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
+
+                  return (
+                    <tr key={tx.id} className="border-b border-slate-200">
+                      <td className="p-1.5 text-slate-500 font-mono text-[10px]">{idx + 1}</td>
+                      <td className="p-1.5 font-mono text-[10px]">
+                        <strong>{tx.refNumber || tx.id}</strong>
+                        <div className="text-slate-500">{new Date(tx.date).toLocaleDateString()}</div>
+                      </td>
+                      <td className="p-1.5 font-bold">
+                        {tx.type === 'income' ? t.typeIncome : tx.type === 'expense' ? t.typeExpense : tx.type === 'transfer' ? t.typeTransfer : t.typeWithdrawal}
+                      </td>
+                      <td className="p-1.5">
+                        {tx.type === 'transfer' 
+                          ? `${getAccountShortName(fromAcc)} ➔ ${getAccountShortName(toAcc)}`
+                          : getAccountShortName(fromAcc)}
+                      </td>
+                      <td className="p-1.5">{tx.category}</td>
+                      <td className="p-1.5 font-semibold">{getPartnerName(tx.partner)}</td>
+                      <td className="p-1.5 text-slate-700 max-w-xs">{tx.notes}</td>
+                      <td className={`p-1.5 font-black whitespace-nowrap ${isRtl ? 'text-left' : 'text-right'} ${
+                        tx.type === 'income' ? 'text-emerald-700' : tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-700' : 'text-slate-800'
+                      }`}>
+                        {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
+                        {formatIQD(amtIQD)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Partner Sign-off & Audit Signature Footer */}
+            <div className="mt-12 pt-6 border-t-2 border-slate-400 grid grid-cols-2 gap-8 text-center print-card">
+              <div>
+                <p className="text-xs font-bold text-slate-600 mb-10">
+                  {lang === 'ku' ? 'واژووی هاوبەش (سەروەر)' : 'Partner Signature (Sarwar)'}
+                </p>
+                <div className="w-48 mx-auto border-b border-dashed border-slate-400"></div>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-600 mb-10">
+                  {lang === 'ku' ? 'واژووی هاوبەش (واژام)' : 'Partner Signature (Wazham)'}
+                </p>
+                <div className="w-48 mx-auto border-b border-dashed border-slate-400"></div>
+              </div>
+            </div>
+          </section>
+
+          {/* Toast Notification */}
+          {toastMessage && (
+            <div className={`fixed bottom-6 ${isRtl ? 'left-6' : 'right-6'} z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-zinc-900 text-white shadow-2xl border border-zinc-700 animate-bounce`}>
+              <Icon name="check" className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-semibold">{toastMessage}</span>
+            </div>
+          )}
+
+          {/* Confirm Dialog */}
+          {confirmDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 p-6 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
+                    <Icon name="alert-circle" className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">{confirmDialog.title}</h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">{confirmDialog.message}</p>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setConfirmDialog(null)}
+                    className="px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    onClick={confirmDialog.onConfirm}
+                    className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-sm ${confirmDialog.confirmColor}`}
+                  >
+                    {confirmDialog.confirmLabel}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header */}
+          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between h-20">
+                
+                {/* Brand Logo & Title */}
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] flex items-center justify-center text-white shadow-xl shadow-[#711612]/20">
+                    <Icon name="layers" className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl font-black tracking-tight text-[#711612]">
+                        {t.appTitle}
+                      </span>
+                      
+
+                
+
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {t.appSubtitle}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Actions & Language Toggle */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition border ${
+                      activeTab === 'settings' 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow' 
+                        : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200'
+                    }`}
+                    title={t.tabSettings}
+                  >
+                    <Icon name="settings" className="w-4 h-4 text-slate-600" />
+                    <span className="hidden md:inline">{lang === 'ku' ? 'ڕێکخستن' : 'Settings'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsTransferModalOpen(true)}
+                    className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                  >
+                    <Icon name="arrow-left-right" className="w-4 h-4 text-indigo-500" />
+                    <span>{t.quickTransfer}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsSettlementModalOpen(true)}
+                    className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition"
+                  >
+                    <Icon name="calculator" className="w-4 h-4" />
+                    <span>{t.partnerSettlement}</span>
+                  </button>
+
+                  <button
+                    onClick={() => openNewTxModal('income')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-[#711612]/25 transition transform active:scale-95"
+                  >
+                    <Icon name="plus-circle" className="w-4 h-4" />
+                    <span>{t.newTransaction}</span>
+                  </button>
+
+                  {/* Current User Badge & Logout */}
+                  <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-200">
+                    <button onClick={handleLogout}
+                      title="Sign Out of ERP"
+                      className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition border border-transparent hover:border-rose-200"
+                    >
+                      <Icon name="log-out" className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Sub-tabs Navigation */}
+              <div className="flex items-center gap-1 sm:gap-2 -mb-px overflow-x-auto no-scrollbar text-xs font-bold border-t border-slate-100 pt-2 pb-2">
+                {[
+                  { id: 'dashboard', label: t.tabDashboard, iconName: 'building-2' },
+                  { id: 'transactions', label: `${t.tabTransactions} (${filteredTransactions.length})`, iconName: 'file-text' },
+                  { id: 'partners', label: t.tabPartners, iconName: 'users' },
+                  { id: 'analytics', label: t.tabAnalytics, iconName: 'bar-chart-3' },
+                  { id: 'settings', label: t.tabSettings, iconName: 'sliders' },
+                  ...(currentUser?.role === 'admin' ? [{ id: 'users', label: `Team & Users (${users.length})`, iconName: 'shield' }] : [])
+                ].map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition whitespace-nowrap ${
+                        isActive
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Icon name={tab.iconName} className="w-3.5 h-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </header>
+
+          {/* Main Body */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            
+            {/* TAB: DASHBOARD */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-8">
+                {/* Hero Card */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-7 relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-2xl border border-indigo-800/40 flex flex-col justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <span className="text-xs uppercase tracking-wider font-extrabold text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-400/20">
+                          {t.totalLiquidity}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setActiveTab('settings')}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-indigo-200 transition"
+                          >
+                            ⚙️ {lang === 'ku' ? 'دانانی باڵانسی سەرەتایی' : 'Set Opening Balances'}
+                          </button>
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700 text-zinc-300">
+                            {t.exchangeRateNote} {exchangeRate.toLocaleString()} IQD
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-3xl sm:text-5xl font-black tracking-tight text-white mt-1">
+                        {formatIQD(totalConsolidatedLiquidity)}
+                      </div>
+                      <div className="text-lg font-bold text-indigo-300/90 mt-1">
+                        ≈ {formatUSD(totalConsolidatedLiquidity)}
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-3 font-normal max-w-lg">
+                        {t.heroDescription}
+                      </p>
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-indigo-900/60 grid grid-cols-3 gap-3">
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalRevenue}</span>
+                        <p className="text-xs sm:text-base font-extrabold text-emerald-400 mt-0.5">
+                          +{formatIQD(metrics.totalRevenue)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalExpenses}</span>
+                        <p className="text-xs sm:text-base font-extrabold text-rose-400 mt-0.5">
+                          -{formatIQD(metrics.totalExpenses)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.netProfit}</span>
+                        <p className={`text-xs sm:text-base font-extrabold mt-0.5 ${metrics.netProfit >= 0 ? 'text-indigo-300' : 'text-rose-400'}`}>
+                          {formatIQD(metrics.netProfit)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Partner Snapshot */}
+                  <div className="lg:col-span-5 rounded-3xl p-6 sm:p-7 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
+                            <Icon name="users" className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-slate-800">{t.partnerDrawingsTitle}</h3>
+                            <p className="text-xs text-slate-500">{t.partnerDrawingsSub}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsSettlementModalOpen(true)}
+                          className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                        >
+                          <span>{t.ledgerBtn}</span>
+                          <Icon name="chevron-right" className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-4 mt-5">
+                        {/* Sarwar Card */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-black text-slate-800">{getPartnerName('Sarwar')}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                {equityRatio.Sarwar}% {t.agreedSplit}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Partner</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                            <div>
+                              <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
+                              <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
+                                {formatIQD(metrics.partnerWithdrawals.Sarwar)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Sarwar)}</p>
+                            </div>
+                            <div className="text-right border-l border-slate-200/60 pl-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                  title="Record a new loan for Sarwar"
+                                >
+                                  + Add Loan
+                                </button>
+                              </div>
+                              <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
+                                {formatIQD(metrics.partnerLoans.Sarwar)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerLoans.Sarwar)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Wazham Card */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-black text-slate-800">{getPartnerName('Wazham')}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FDF2F2] text-[#711612] border border-[#F8C8C6]">
+                                {equityRatio.Wazham}% {t.agreedSplit}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Administrator</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                            <div>
+                              <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
+                              <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
+                                {formatIQD(metrics.partnerWithdrawals.Wazham)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Wazham)}</p>
+                            </div>
+                            <div className="text-right border-l border-slate-200/60 pl-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                  title="Record a new loan for Sarwar"
+                                >
+                                  + Add Loan
+                                </button>
+                              </div>
+                              <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
+                                {formatIQD(metrics.partnerLoans.Wazham)}
+                              </span>
+                              <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerLoans.Wazham)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                      <span>{t.netRetainedInBiz}</span>
+                      <span className="font-bold text-slate-800">{formatIQD(metrics.netRetained)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5 Accounts Cards */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Icon name="wallet" className="w-5 h-5 text-indigo-600" />
+                        <span>{t.walletsSectionTitle}</span>
+                      </h2>
+                      <p className="text-xs text-slate-500">{t.walletsSectionSub}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setActiveTab('settings')}
+                        className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
+                      >
+                        <Icon name="sliders" className="w-3.5 h-3.5" />
+                        <span>{lang === 'ku' ? 'گۆڕینی باڵانسی سەرەتا' : 'Edit Opening Balances'}</span>
+                      </button>
+                      <button
+                        onClick={() => setIsTransferModalOpen(true)}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                      >
+                        <Icon name="arrow-left-right" className="w-3.5 h-3.5" />
+                        <span>{t.transferBetweenAccounts}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {Object.values(ACCOUNTS).map((acc) => {
+                      const bal = accountBalances[acc.id] || 0;
+                      const initialAmt = openingBalances[acc.id] || 0;
+                      const percentOfTotal = totalConsolidatedLiquidity > 0 
+                        ? ((bal / totalConsolidatedLiquidity) * 100).toFixed(1)
+                        : 0;
+
+                      return (
+                        <div
+                          key={acc.id}
+                          onClick={() => {
+                            setSelectedAccountFilter(acc.id);
+                            setActiveTab('transactions');
+                          }}
+                          className="cursor-pointer group p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition duration-150 flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-xs font-bold text-slate-500 truncate">
+                                {getAccountShortName(acc)}
+                              </span>
+                              <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${acc.gradient} text-white flex items-center justify-center shadow-md`}>
+                                <Icon name={acc.iconName} className="w-4 h-4" />
+                              </div>
+                            </div>
+                            <div className="text-xl font-black text-slate-900 truncate">
+                              {formatIQD(bal)}
+                            </div>
+                            <div className="text-xs font-medium text-slate-400 mt-0.5">
+                              ≈ {formatUSD(bal)}
+                            </div>
+                            {initialAmt > 0 && (
+                              <div className="text-[10px] text-indigo-600 font-semibold mt-1">
+                                {lang === 'ku' ? 'سەرمایەی سەرەتا:' : 'Starting:'} {formatIQD(initialAmt)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">{percentOfTotal}% {t.percentOfTotal}</span>
+                            <span className="font-semibold text-indigo-600 group-hover:underline">
+                              {t.viewLedger}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Recent Transactions list */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">{t.recentTransactions}</h3>
+                      <p className="text-xs text-slate-500">{t.recentTransactionsSub}</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('transactions')}
+                      className="text-xs font-bold text-indigo-600 hover:underline"
+                    >
+                      {t.viewAll} ({transactions.length}) →
+                    </button>
+                  </div>
+
+                  {transactions.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs">
+                      <p className="font-semibold">{t.noRecords}</p>
+                      <p className="mt-1">{t.noRecordsSub}</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {transactions.slice(0, 5).map((tx) => (
+                        <div key={tx.id} className="py-3.5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              tx.type === 'income' ? 'bg-emerald-100 text-emerald-700' :
+                              tx.type === 'expense' ? 'bg-rose-100 text-rose-700' :
+                              tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              <Icon name={
+                                tx.type === 'income' ? 'arrow-down-left' :
+                                tx.type === 'expense' ? 'arrow-up-right' :
+                                tx.type === 'withdrawal' ? 'user-check' : 'arrow-left-right'
+                              } className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-800">{tx.category}</span>
+                                <span className="text-[11px] font-mono text-slate-400">#{tx.refNumber || tx.id}</span>
+                              </div>
+                              <p className="text-xs text-slate-500 truncate max-w-sm sm:max-w-md">
+                                {tx.notes}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={`${isRtl ? 'text-left' : 'text-right'} shrink-0`}>
+                            <div className={`text-sm font-black ${
+                              tx.type === 'income' ? 'text-emerald-600' :
+                              tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
+                              'text-blue-600'
+                            }`}>
+                              {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
+                              {formatIQD(toIQD(tx.amount, tx.currency))}
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              {new Date(tx.date).toLocaleDateString()} • {getAccountShortName(ACCOUNTS[tx.accountId])}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: TRANSACTIONS */}
+            {activeTab === 'transactions' && (
+              <div className="space-y-6">
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="relative flex-1 w-full">
+                      <input
+                        type="text"
+                        placeholder={t.searchPlaceholder}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className={`w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        onClick={() => window.print()}
+                        className="p-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                        title="Print A4"
+                      >
+                        <Icon name="printer" className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={exportCSV}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition shadow-sm"
+                      >
+                        <Icon name="download" className="w-4 h-4" />
+                        <span>{t.exportCsv}</span>
+                      </button>
+                      <button
+                        onClick={() => openNewTxModal('income')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                      >
+                        <Icon name="plus-circle" className="w-4 h-4" />
+                        <span>{t.addEntry}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filter Selects */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">{t.accountFilter}</label>
+                      <select
+                        value={selectedAccountFilter}
+                        onChange={(e) => setSelectedAccountFilter(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                      >
+                        <option value="all">{t.allAccounts}</option>
+                        {Object.values(ACCOUNTS).map((acc) => (
+                          <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">{t.txTypeFilter}</label>
+                      <select
+                        value={selectedTypeFilter}
+                        onChange={(e) => setSelectedTypeFilter(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                      >
+                        <option value="all">{t.allTypes}</option>
+                        <option value="income">{t.typeIncome}</option>
+                        <option value="expense">{t.typeExpense}</option>
+                        <option value="transfer">{t.typeTransfer}</option>
+                        <option value="withdrawal">{t.typeWithdrawal}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">{t.partnerFilter}</label>
+                      <select
+                        value={selectedPartnerFilter}
+                        onChange={(e) => setSelectedPartnerFilter(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                      >
+                        <option value="all">{t.allPartners}</option>
+                        {PARTNERS.map((p) => (
+                          <option key={p} value={p}>{getPartnerName(p)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">{t.datePeriod}</label>
+                      <select
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                      >
+                        <option value="all">{t.allTime}</option>
+                        <option value="today">{t.today}</option>
+                        <option value="week">{t.past7Days}</option>
+                        <option value="month">{t.thisMonth}</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        onClick={() => {
+                          setSearchQuery('');
+                          setSelectedAccountFilter('all');
+                          setSelectedPartnerFilter('all');
+                          setSelectedTypeFilter('all');
+                          setDateFilter('all');
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center gap-1.5"
+                      >
+                        <Icon name="refresh-cw" className="w-3.5 h-3.5" />
+                        <span>{t.resetFilters}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">{t.masterLedger}</h3>
+                      <p className="text-xs text-slate-400">{t.displayingRecords}: {filteredTransactions.length}</p>
+                    </div>
+                    {transactions.length > 0 && (
+                      <button
+                        onClick={handleClearAllTransactions}
+                        className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-200 transition flex items-center gap-1.5"
+                      >
+                        <Icon name="trash-2" className="w-3.5 h-3.5" />
+                        <span>{t.clearAllTxBtn}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {filteredTransactions.length === 0 ? (
+                    <div className="p-16 text-center">
+                      <Icon name="file-text" className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="text-base font-bold text-slate-700">{t.noRecords}</p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">{t.noRecordsSub}</p>
+                      <button
+                        onClick={() => openNewTxModal('income')}
+                        className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition"
+                      >
+                        <Icon name="plus-circle" className="w-4 h-4" />
+                        <span>{t.addEntry}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className={`w-full ${isRtl ? 'text-right' : 'text-left'} border-collapse`}>
+                        <thead>
+                          <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b border-slate-200">
+                            <th className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'}`}>{t.colRefDate}</th>
+                            <th className="p-4">{t.colType}</th>
+                            <th className="p-4">{t.colAmount}</th>
+                            <th className="p-4">{t.colAccountFlow}</th>
+                            <th className="p-4">{t.colCategory}</th>
+                            <th className="p-4">{t.colPartner}</th>
+                            <th className="p-4">{t.colNotes}</th>
+                            <th className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'}`}>{t.colActions}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm">
+                          {filteredTransactions.map((tx) => {
+                            const amtIQD = toIQD(tx.amount, tx.currency);
+                            const fromAcc = ACCOUNTS[tx.accountId];
+                            const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
+
+                            return (
+                              <tr key={tx.id} className="hover:bg-slate-50/70 transition">
+                                <td className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'} whitespace-nowrap`}>
+                                  <span className="font-mono text-xs font-bold text-slate-800">
+                                    {tx.refNumber || tx.id}
+                                  </span>
+                                  <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                    <Icon name="calendar" className="w-3 h-3" />
+                                    {new Date(tx.date).toLocaleDateString()}
+                                  </div>
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                                    tx.type === 'income' ? 'bg-emerald-100 text-emerald-800' :
+                                    tx.type === 'expense' ? 'bg-rose-100 text-rose-800' :
+                                    tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    <span>{tx.type === 'income' ? t.typeIncome : tx.type === 'expense' ? t.typeExpense : tx.type === 'transfer' ? t.typeTransfer : t.typeWithdrawal}</span>
+                                  </span>
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  <div className={`text-sm font-black ${
+                                    tx.type === 'income' ? 'text-emerald-600' :
+                                    tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
+                                    'text-blue-600'
+                                  }`}>
+                                    {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
+                                    {formatIQD(amtIQD)}
+                                  </div>
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  {tx.type === 'transfer' ? (
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <span className={`px-2 py-0.5 rounded-md font-semibold border ${fromAcc?.badge}`}>
+                                        {getAccountShortName(fromAcc)}
+                                      </span>
+                                      <span className="text-slate-400">{isRtl ? '←' : '➔'}</span>
+                                      <span className={`px-2 py-0.5 rounded-md font-semibold border ${toAcc?.badge}`}>
+                                        {getAccountShortName(toAcc)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${fromAcc?.badge}`}>
+                                      {getAccountName(fromAcc)}
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
+                                    {tx.category}
+                                  </span>
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                    {getPartnerName(tx.partner)}
+                                  </span>
+                                </td>
+
+                                <td className="p-4 text-xs text-slate-600 max-w-xs truncate">
+                                  {tx.notes}
+                                </td>
+
+                                <td className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'} whitespace-nowrap`}>
+                                  <div className={`flex items-center ${isRtl ? 'justify-start' : 'justify-end'} gap-1`}>
+                                    <button
+                                      onClick={() => openEditTxModal(tx)}
+                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg"
+                                      title="Edit"
+                                    >
+                                      <Icon name="edit-3" className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteTx(tx.id)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                      title="Delete"
+                                    >
+                                      <Icon name="trash-2" className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: PARTNERS */}
+            {activeTab === 'partners' && (
+              <div className="space-y-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-purple-900 to-indigo-950 text-white">
+                  <div>
+                    <h2 className="text-xl font-black">{t.partnersHeaderTitle}</h2>
+                    <p className="text-xs sm:text-sm text-purple-200 mt-1 max-w-xl">
+                      {t.partnersHeaderSub}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsSettlementModalOpen(true)}
+                    className="px-4 py-2.5 bg-white text-purple-950 font-black text-xs rounded-xl shadow-lg hover:bg-purple-50 transition"
+                  >
+                    {t.configureSimulate}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Sarwar */}
+                  <div className="rounded-3xl p-6 bg-white border border-slate-200 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center font-black text-lg">
+                          {lang === 'ku' ? 'س' : 'S'}
+                        </div>
+                        <div>
+                          <h3 className="text-base font-black text-slate-800">{getPartnerName('Sarwar')}</h3>
+                          <p className="text-xs text-slate-400">{lang === 'ku' ? 'هاوبەشی سەرەکی' : 'Co-Founder'}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-blue-100 text-blue-800">
+                        {equityRatio.Sarwar}% {t.agreedSplit}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-4 rounded-2xl bg-slate-50">
+                        <span className="text-xs font-semibold text-slate-400">{t.entitledShare}</span>
+                        <p className="text-base sm:text-lg font-black text-slate-800 mt-1">
+                          {formatIQD(partnerSettlement.sarwarEntitled)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-slate-50">
+                        <span className="text-xs font-semibold text-slate-400">{t.totalWithdrawn}</span>
+                        <p className="text-base sm:text-lg font-black text-amber-600 mt-1">
+                          {formatIQD(partnerSettlement.sarwarWithdrawn)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-100">
+                        <span className="text-xs font-semibold text-rose-600">Active Loan:</span>
+                        <p className="text-base sm:text-lg font-black text-rose-700 mt-1">
+                          {formatIQD(partnerSettlement.sarwarLoan)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/60 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-blue-900">{t.netDueTo} {getPartnerName('Sarwar')}:</span>
+                        <p className="text-xl font-black text-blue-950 mt-0.5">
+                          {formatIQD(partnerSettlement.sarwarNetDue)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
+                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                          title="Add loan for Sarwar"
+                        >
+                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                          <span>+ Add Loan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Drawing')}
+                          className="px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition"
+                        >
+                          {t.logDrawing}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Wazham */}
+                  <div className="rounded-3xl p-6 bg-white border border-slate-200 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center font-black text-lg">
+                          {lang === 'ku' ? 'و' : 'W'}
+                        </div>
+                        <div>
+                          <h3 className="text-base font-black text-slate-800">{getPartnerName('Wazham')}</h3>
+                          <p className="text-xs text-slate-400">{lang === 'ku' ? 'هاوبەشی سەرەکی' : 'Co-Founder'}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-purple-100 text-purple-800">
+                        {equityRatio.Wazham}% {t.agreedSplit}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-4 rounded-2xl bg-slate-50">
+                        <span className="text-xs font-semibold text-slate-400">{t.entitledShare}</span>
+                        <p className="text-base sm:text-lg font-black text-slate-800 mt-1">
+                          {formatIQD(partnerSettlement.wazhamEntitled)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-slate-50">
+                        <span className="text-xs font-semibold text-slate-400">{t.totalWithdrawn}</span>
+                        <p className="text-base sm:text-lg font-black text-amber-600 mt-1">
+                          {formatIQD(partnerSettlement.wazhamWithdrawn)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-100">
+                        <span className="text-xs font-semibold text-rose-600">Active Loan:</span>
+                        <p className="text-base sm:text-lg font-black text-rose-700 mt-1">
+                          {formatIQD(partnerSettlement.wazhamLoan)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF0DC]/70 border border-[#F4E0BB] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-[#704522]">{t.netDueTo} {getPartnerName('Wazham')}:</span>
+                        <p className="text-xl font-black text-[#5C391E] mt-0.5">
+                          {formatIQD(partnerSettlement.wazhamNetDue)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Loan / Advance')}
+                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                          title="Add loan for Wazham"
+                        >
+                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                          <span>+ Add Loan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Drawing')}
+                          className="px-3 py-2 text-xs font-bold bg-[#AB7431] hover:bg-[#8A5825] text-white rounded-xl shadow-sm transition"
+                        >
+                          {t.logDrawing}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Audit Log */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                  <h3 className="text-base font-bold text-slate-800 mb-1">{t.auditLogTitle}</h3>
+                  <p className="text-xs text-slate-400 mb-4">{t.auditLogSub}</p>
+                  <div className="divide-y divide-slate-100">
+                    {transactions.filter(t => t.type === 'withdrawal').length === 0 ? (
+                      <p className="text-xs text-slate-400 py-6 text-center">{t.noWithdrawals}</p>
+                    ) : (
+                      transactions.filter(t => t.type === 'withdrawal').map(tx => (
+                        <div key={tx.id} className="py-3 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800">{getPartnerName(tx.partner)}</span>
+                              <span className="text-slate-400 font-mono">#{tx.refNumber || tx.id}</span>
+                              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">
+                                {lang === 'ku' ? `لە ${getAccountShortName(ACCOUNTS[tx.accountId])}` : `from ${ACCOUNTS[tx.accountId]?.shortName}`}
+                              </span>
+                            </div>
+                            <p className="text-slate-500 mt-0.5">{tx.notes}</p>
+                          </div>
+                          <div className={isRtl ? 'text-left' : 'text-right'}>
+                            <span className="font-black text-rose-600 text-sm">
+                              -{formatIQD(toIQD(tx.amount, tx.currency))}
+                            </span>
+                            <p className="text-[10px] text-slate-400">{new Date(tx.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ANALYTICS */}
+            {activeTab === 'analytics' && (
+              <div className="space-y-8">
+                {/* Distribution */}
+                <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">{t.liquidityDistTitle}</h3>
+                      <p className="text-xs text-slate-500">{t.liquidityDistSub}</p>
+                    </div>
+                    <div className={isRtl ? 'text-left' : 'text-right'}>
+                      <span className="text-xs text-slate-400 font-semibold">{t.totalLiquidity}</span>
+                      <p className="text-base font-black text-slate-900">{formatIQD(totalConsolidatedLiquidity)}</p>
+                    </div>
+                  </div>
+
+                  {/* Bar */}
+                  <div className="h-6 w-full rounded-2xl overflow-hidden flex bg-slate-100 p-1 gap-1">
+                    {Object.values(ACCOUNTS).map(acc => {
+                      const bal = Math.max(0, accountBalances[acc.id] || 0);
+                      const percentage = totalConsolidatedLiquidity > 0 ? (bal / totalConsolidatedLiquidity) * 100 : 0;
+                      if (percentage <= 0) return null;
+                      return (
+                        <div
+                          key={acc.id}
+                          style={{ width: `${percentage}%` }}
+                          className={`h-full rounded-xl bg-gradient-to-r ${acc.gradient}`}
+                          title={`${getAccountName(acc)}: ${percentage.toFixed(1)}%`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6">
+                    {Object.values(ACCOUNTS).map(acc => {
+                      const bal = accountBalances[acc.id] || 0;
+                      const pct = totalConsolidatedLiquidity > 0 ? ((bal / totalConsolidatedLiquidity) * 100).toFixed(1) : 0;
+                      return (
+                        <div key={acc.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.colorHex }} />
+                            <span className="text-xs font-bold text-slate-700 truncate">{getAccountShortName(acc)}</span>
+                          </div>
+                          <div className="text-sm font-extrabold text-slate-900">{formatIQD(bal)}</div>
+                          <span className="text-[11px] text-slate-400">{pct}% {t.share}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Categories */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Revenue Categories */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="trending-up" className="w-4 h-4 text-emerald-500" />
+                        <span>{t.revenueByCategory}</span>
+                      </h4>
+                      <span className="text-xs font-bold text-emerald-600">+{formatIQD(metrics.totalRevenue)}</span>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      {Object.entries(categoryBreakdown.incomeCats).length === 0 ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">{lang === 'ku' ? 'هیچ داهاتێک نییە.' : 'No revenue recorded.'}</p>
+                      ) : (
+                        Object.entries(categoryBreakdown.incomeCats).map(([cat, amount]) => {
+                          const share = metrics.totalRevenue > 0 ? (amount / metrics.totalRevenue) * 100 : 0;
+                          return (
+                            <div key={cat} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-slate-700">{cat}</span>
+                                <span className="font-bold text-slate-900">{formatIQD(amount)} ({share.toFixed(0)}%)</span>
+                              </div>
+                              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${share}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expenses Categories */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="trending-down" className="w-4 h-4 text-rose-500" />
+                        <span>{t.expensesByCategory}</span>
+                      </h4>
+                      <span className="text-xs font-bold text-rose-600">-{formatIQD(metrics.totalExpenses)}</span>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      {Object.entries(categoryBreakdown.expenseCats).length === 0 ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">{lang === 'ku' ? 'هیچ خەرجییەک نییە.' : 'No expenses recorded.'}</p>
+                      ) : (
+                        Object.entries(categoryBreakdown.expenseCats).map(([cat, amount]) => {
+                          const share = metrics.totalExpenses > 0 ? (amount / metrics.totalExpenses) * 100 : 0;
+                          return (
+                            <div key={cat} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-slate-700">{cat}</span>
+                                <span className="font-bold text-slate-900">{formatIQD(amount)} ({share.toFixed(0)}%)</span>
+                              </div>
+                              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div className="bg-rose-500 h-full rounded-full" style={{ width: `${share}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SETTINGS & OPENING BALANCES (نوێ: بەشی ڕێکخستنی سەرمایەی سەرەتا و سڕینەوە) */}
+            {activeTab === 'settings' && (
+              <div className="space-y-8 max-w-4xl mx-auto">
+                {/* Header Card */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/20">
+                      <Icon name="sliders" className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black">{t.settingsTitle}</h2>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1">{t.settingsSub}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5 Accounts Opening Balances Form */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
+                  <div className="border-b border-slate-100 pb-4">
+                    <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <Icon name="wallet" className="w-5 h-5 text-indigo-600" />
+                      <span>{t.openingBalancesTitle}</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">{t.openingBalancesDesc}</p>
+                  </div>
+
+                  <form onSubmit={handleSaveOpeningBalances} className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {Object.values(ACCOUNTS).map((acc) => (
+                        <div key={acc.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.colorHex }}></span>
+                              {getAccountName(acc)}
+                            </span>
+                            <span className="text-[11px] font-mono text-slate-400">IQD</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={openingForm[acc.id] || ''}
+                            onChange={(e) => setOpeningForm({ ...openingForm, [acc.id]: e.target.value })}
+                            className="w-full p-2.5 bg-white border border-slate-300 rounded-xl font-black text-base text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          />
+                          <p className="text-[10px] text-slate-400">
+                            ≈ {formatUSD(Number(openingForm[acc.id]) || 0)}
+                          </p>
+                        </div>
+                      ))}
+
+                      {/* USD Exchange Rate Setting */}
+                      <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-bold text-indigo-950 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Icon name="dollar-sign" className="w-4 h-4 text-indigo-600" />
+                            {t.usdRateLabel}
+                          </span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="100"
+                            value={exchangeRate}
+                            onChange={(e) => setExchangeRate(Number(e.target.value) || 1500)}
+                            className="w-full p-2.5 bg-white border border-indigo-300 rounded-xl font-black text-base text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          />
+                        </div>
+                        <p className="text-[11px] text-indigo-700">
+                          {lang === 'ku' ? 'ئەم نرخە بۆ گۆڕینی دۆلار بۆ دینار لە سەرجەم ئەپەکەدا بەکاردێت.' : 'This rate is used across the system for currency conversions.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-[#711612]/25 transition flex items-center gap-2"
+                      >
+                        <Icon name="check" className="w-4 h-4" />
+                        <span>{t.saveSettings}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Danger Zone: Wipe / Reset Data */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-rose-50/60 border border-rose-200 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-rose-100 text-rose-700">
+                      <Icon name="alert-triangle" className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-rose-950">{t.dangerZone}</h3>
+                      <p className="text-xs text-rose-700 mt-0.5">{t.dangerZoneDesc}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
+                    <div className="p-4 rounded-2xl bg-white border border-rose-200 space-y-2 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{t.clearAllTxBtn}</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {lang === 'ku' ? 'تەواوی جووڵە داراییەکان دەسڕێتەوە، بەڵام سەرمایەی سەرەتا و باڵانسی ٥ هەژمارەکە دەهێڵێتەوە.' : 'Deletes transaction records while preserving your starting balances.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleClearAllTransactions}
+                        className="mt-3 w-full py-2.5 px-4 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                      >
+                        <Icon name="trash-2" className="w-4 h-4" />
+                        <span>{t.clearAllTxBtn}</span>
+                      </button>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white border border-rose-300 space-y-2 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-rose-950">{t.resetEverythingBtn}</h4>
+                        <p className="text-xs text-rose-700 mt-0.5">
+                          {lang === 'ku' ? 'هەموو شتێک بە تەواوی سفر دەکرێتەوە و دەگەڕێتەوە بۆ دۆخی سەرەتا (پاکتاوی ١٠٠٪).' : 'Zeros out all 5 account balances and clears the entire ledger completely.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleResetEverything}
+                        className="mt-3 w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
+                      >
+                        <Icon name="alert-circle" className="w-4 h-4" />
+                        <span>{t.resetEverythingBtn}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===================== TAB: USER MANAGEMENT (ADMIN ONLY) ===================== */}
+            {activeTab === 'users' && currentUser?.role === 'admin' && (
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="p-6 rounded-3xl bg-gradient-to-r from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-xl border border-[#8C1E1A]/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#AB7431] text-white">
+                        Access Control Center
+                      </span>
+                      <span className="text-xs text-slate-300 font-medium">Administrator: Wazham</span>
+                    </div>
+                    <h2 className="text-2xl font-black tracking-tight">Portal User Management</h2>
+                    <p className="text-xs text-slate-300 max-w-xl mt-1">
+                      Authorized by Wazham: Add and manage team members with standard user access to the Order Center platform.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddUserModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-[#AB7431] hover:bg-[#8A5825] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition transform active:scale-95"
+                  >
+                    <Icon name="user-plus" className="w-4 h-4" />
+                    <span>+ Add New User</span>
+                  </button>
+                </div>
+
+                {/* User Metrics Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Accounts</span>
+                    <div className="text-2xl font-black text-slate-900 mt-1">{users.length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-[#F8C8C6] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#711612] uppercase tracking-wider">Administrators</span>
+                    <div className="text-2xl font-black text-[#711612] mt-1">{users.filter(u => u.role === 'admin').length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-[#F4E0BB] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#8A5825] uppercase tracking-wider">Staff Users</span>
+                    <div className="text-2xl font-black text-[#8A5825] mt-1">{users.filter(u => u.role === 'user').length}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-sm">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Active Status</span>
+                    <div className="text-2xl font-black text-emerald-600 mt-1">{users.filter(u => u.active).length}</div>
+                  </div>
+                </div>
+
+                {/* Users Table Card */}
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900">Registered Portal Users</h3>
+                      <p className="text-xs text-slate-500">All authenticated identities with access to this ERP instance</p>
+                    </div>
+                    <button
+                      onClick={() => setIsAddUserModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#711612] bg-[#FDF2F2] hover:bg-[#FDE4E4] border border-[#F8C8C6] rounded-xl transition"
+                    >
+                      <Icon name="plus" className="w-3.5 h-3.5" />
+                      <span>Add User</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="p-3.5">User</th>
+                          <th className="p-3.5">Role</th>
+                          <th className="p-3.5">Department / Partner</th>
+                          <th className="p-3.5">Status</th>
+                          <th className="p-3.5">Date Added</th>
+                          <th className="p-3.5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {users.map((u) => {
+                          const isSelf = u.id === currentUser?.id;
+                          return (
+                            <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                              <td className="p-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs ${
+                                    u.role === 'admin' ? 'bg-[#711612]' : 'bg-[#AB7431]'
+                                  }`}>
+                                    {u.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                      <span>{u.name}</span>
+                                      {isSelf && (
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                                          You
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono">@{u.username}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3.5">
+                                {u.role === 'admin' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF2F2] text-[#711612] border border-[#F8C8C6] font-bold text-[10px] uppercase">
+                                    <Icon name="shield" className="w-3 h-3 text-[#711612]" />
+                                    Administrator
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF9F2] text-[#8A5825] border border-[#F4E0BB] font-bold text-[10px] uppercase">
+                                    <Icon name="user" className="w-3 h-3 text-[#AB7431]" />
+                                    Staff User
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="p-3.5">
+                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-semibold text-slate-700 text-xs">
+                                  {u.partner || 'General'}
+                                </span>
+                              </td>
+
+                              <td className="p-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleUserStatus(u.id)}
+                                  disabled={isSelf}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition ${
+                                    u.active 
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                                  } ${isSelf ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${u.active ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                  <span>{u.active ? 'Active' : 'Suspended'}</span>
+                                </button>
+                              </td>
+
+                              <td className="p-3.5 text-slate-500 font-mono text-[11px]">
+                                {u.createdAt || '2026-01-01'}
+                              </td>
+
+                              <td className="p-3.5 text-right">
+                                <div className="inline-flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => setResetPasswordModal({
+                                      isOpen: true,
+                                      username: u.username,
+                                      name: u.name,
+                                      newPassword: ''
+                                    })}
+                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                    title="Reset Password"
+                                  >
+                                    <Icon name="key" className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {!isSelf && (
+                                    <button
+                                      onClick={() => handleDeleteUser(u.id)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                      title="Delete Account"
+                                    >
+                                      <Icon name="trash-2" className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===================== MODAL: ADD NEW USER ===================== */}
+            {isAddUserModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+                <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#FDF2F2] border border-[#F8C8C6] text-[#711612] flex items-center justify-center">
+                        <Icon name="user-plus" className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Add Portal User</h3>
+                        <p className="text-xs text-slate-500">Provision a new account with customized access role</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsAddUserModalOpen(false)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      <Icon name="x" className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAddUser} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ali Ahmed"
+                        value={newUserForm.name}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Username (Login ID) *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. ali or ali@ordercenter"
+                          value={newUserForm.username}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, username: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Initial Password *</label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="••••••••"
+                          value={newUserForm.password}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Role</label>
+                        <div className="w-full p-2.5 text-xs font-bold bg-slate-100 border border-slate-200 rounded-xl text-slate-700 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Icon name="user" className="w-3.5 h-3.5 text-[#AB7431]" />
+                            <span>User (Staff Account)</span>
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AB7431] text-white uppercase font-bold">User</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Department / Branch</label>
+                        <select
+                          value={newUserForm.partner}
+                          onChange={(e) => setNewUserForm({ ...newUserForm, partner: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                        >
+                          <option value="Sarwar">Sarwar Department</option>
+                          <option value="Wazham">Wazham Department</option>
+                          <option value="Staff">Operations Staff</option>
+                          <option value="Accounting">Accounting / Audit</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddUserModalOpen(false)}
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                      >
+                        Create User Account
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ===================== MODAL: RESET PASSWORD ===================== */}
+            {resetPasswordModal.isOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+                <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center">
+                        <Icon name="key" className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Reset Password</h3>
+                        <p className="text-xs text-slate-500">For @{resetPasswordModal.username} ({resetPasswordModal.name})</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      <Icon name="x" className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveNewPassword} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">New Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Enter new password"
+                        value={resetPasswordModal.newPassword}
+                        onChange={(e) => setResetPasswordModal({ ...resetPasswordModal, newPassword: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#711612]"
+                      />
+                    </div>
+
+                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                      >
+                        Save Password
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* MODAL: TRANSACTION */}
+          {isTxModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="relative w-full max-w-lg rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-8">
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">
+                      {editingTx ? t.recordModalTitleEdit : t.recordModalTitleNew}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{t.recordModalSub}</p>
+                  </div>
+                  <button onClick={closeTxModal} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                    <Icon name="x" className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveTransaction} className="p-6 space-y-4">
+                  {/* Type buttons */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500' },
+                        { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500' },
+                        { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right', color: 'text-blue-500' },
+                        { id: 'withdrawal', label: t.typeWithdrawal, icon: 'user-check', color: 'text-amber-500' }
+                      ].map((tItem) => {
+                        const isSelected = txForm.type === tItem.id;
+                        return (
+                          <button
+                            type="button"
+                            key={tItem.id}
+                            onClick={() => {
+                              setTxForm({ 
+                                ...txForm, 
+                                type: tItem.id, 
+                                category: TRANSACTION_CATEGORIES[tItem.id][0] || 'General' 
+                              });
+                            }}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <Icon name={tItem.icon} className={`w-4 h-4 ${isSelected ? 'text-white' : tItem.color}`} />
+                            <span>{tItem.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Amount & Currency */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.amountCurrency}</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        placeholder="e.g. 500000"
+                        value={txForm.amount}
+                        onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
+                        className="w-full p-2.5 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                      <select
+                        value={txForm.currency}
+                        onChange={(e) => setTxForm({ ...txForm, currency: e.target.value })}
+                        className="p-2.5 font-bold text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-800"
+                      >
+                        <option value="IQD">{lang === 'ku' ? 'دینار (د.ع)' : 'IQD'}</option>
+                        <option value="USD">{lang === 'ku' ? 'دۆلار ($)' : 'USD'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Accounts */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        {txForm.type === 'transfer' ? t.sourceAccount : t.accountTarget}
+                      </label>
+                      <select
+                        value={txForm.accountId}
+                        onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                      >
+                        {Object.values(ACCOUNTS).map((acc) => (
+                          <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {txForm.type === 'transfer' ? (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.destAccount}</label>
+                        <select
+                          value={txForm.toAccountId}
+                          onChange={(e) => setTxForm({ ...txForm, toAccountId: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                        >
+                          {Object.values(ACCOUNTS)
+                            .filter(a => a.id !== txForm.accountId)
+                            .map((acc) => (
+                              <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                            ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.associatedPartner}</label>
+                        <select
+                          value={txForm.partner}
+                          onChange={(e) => setTxForm({ ...txForm, partner: e.target.value })}
+                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                        >
+                          {PARTNERS.map((p) => (
+                            <option key={p} value={p}>{getPartnerName(p)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category & Ref # */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.accountingCategory}</label>
+                      <select
+                        value={txForm.category}
+                        onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                      >
+                        {(TRANSACTION_CATEGORIES[txForm.type] || []).map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.refInvoiceNum}</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. ORD-9821"
+                        value={txForm.refNumber}
+                        onChange={(e) => setTxForm({ ...txForm, refNumber: e.target.value })}
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.reasonMemo}</label>
+                    <textarea
+                      rows="3"
+                      required
+                      placeholder={t.memoPlaceholder}
+                      value={txForm.notes}
+                      onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl resize-none"
+                    />
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.dateTimeMovement}</label>
+                    <input
+                      type="datetime-local"
+                      value={txForm.date}
+                      onChange={(e) => setTxForm({ ...txForm, date: e.target.value })}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                    />
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={closeTxModal}
+                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                    >
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-[#711612]/25"
+                    >
+                      {editingTx ? t.updateEntry : t.postToLedger}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: TRANSFER */}
+          {isTransferModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="relative w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">{t.quickTransferTitle}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{t.quickTransferSub}</p>
+                  </div>
+                  <button onClick={() => setIsTransferModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                    <Icon name="x" className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveTransfer} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.transferAmount}</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        placeholder="e.g. 1000000"
+                        value={transferForm.amount}
+                        onChange={(e) => setTransferForm({ ...transferForm, amount: e.target.value })}
+                        className="w-full p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                      <select
+                        value={transferForm.currency}
+                        onChange={(e) => setTransferForm({ ...transferForm, currency: e.target.value })}
+                        className="p-2.5 text-xs font-bold bg-slate-100 border border-slate-200 rounded-xl"
+                      >
+                        <option value="IQD">IQD</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.sourceAccount}</label>
+                      <select
+                        value={transferForm.fromAccountId}
+                        onChange={(e) => setTransferForm({ ...transferForm, fromAccountId: e.target.value })}
+                        className="w-full p-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                      >
+                        {Object.values(ACCOUNTS).map(acc => (
+                          <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.destAccount}</label>
+                      <select
+                        value={transferForm.toAccountId}
+                        onChange={(e) => setTransferForm({ ...transferForm, toAccountId: e.target.value })}
+                        className="w-full p-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                      >
+                        {Object.values(ACCOUNTS)
+                          .filter(a => a.id !== transferForm.fromAccountId)
+                          .map(acc => (
+                            <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.authorizingPartner}</label>
+                    <select
+                      value={transferForm.partner}
+                      onChange={(e) => setTransferForm({ ...transferForm, partner: e.target.value })}
+                      className="w-full p-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                    >
+                      {PARTNERS.map(p => (
+                        <option key={p} value={p}>{getPartnerName(p)}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.transferNote}</label>
+                    <input
+                      type="text"
+                      value={transferForm.notes}
+                      onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
+                      className="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferModalOpen(false)}
+                      className="flex-1 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 rounded-xl"
+                    >
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md"
+                    >
+                      {t.executeTransfer}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: SETTLEMENT SIMULATOR */}
+          {isSettlementModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="relative w-full max-w-xl rounded-3xl bg-white border border-slate-200 shadow-2xl p-6 space-y-6">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Icon name="calculator" className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-base font-black text-slate-900">{t.settlementTitle}</h3>
+                  </div>
+                  <button onClick={() => setIsSettlementModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                    <Icon name="x" className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Slider */}
+                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200 space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-purple-950">
+                      <span>{getPartnerName('Sarwar')}: {equityRatio.Sarwar}%</span>
+                      <span>{getPartnerName('Wazham')}: {equityRatio.Wazham}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={equityRatio.Sarwar}
+                      onChange={(e) => {
+                        const sarwarVal = Number(e.target.value);
+                        setEquityRatio({ Sarwar: sarwarVal, Wazham: 100 - sarwarVal });
+                      }}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                    <p className="text-[11px] text-purple-700">{t.settlementSub}</p>
+                  </div>
+
+                  {/* Settlement Calculation Table */}
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs">
+                    <table className={`w-full ${isRtl ? 'text-right' : 'text-left'}`}>
+                      <thead className="bg-slate-50 font-bold text-slate-500">
+                        <tr>
+                          <th className="p-3">{t.colPartner}</th>
+                          <th className="p-3">{t.entitledShare}</th>
+                          <th className="p-3">{t.totalWithdrawn}</th>
+                          <th className="p-3">Partner Loan:</th>
+                          <th className={`p-3 ${isRtl ? 'text-left' : 'text-right'}`}>{t.netLiquidationOwed}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">{getPartnerName('Sarwar')} ({equityRatio.Sarwar}%)</td>
+                          <td className="p-3">{formatIQD(partnerSettlement.sarwarEntitled)}</td>
+                          <td className="p-3 text-amber-600">-{formatIQD(partnerSettlement.sarwarWithdrawn)}</td>
+                          <td className="p-3 text-rose-600 font-bold">-{formatIQD(partnerSettlement.sarwarLoan)}</td>
+                          <td className={`p-3 ${isRtl ? 'text-left' : 'text-right'} font-black text-indigo-600`}>
+                            {formatIQD(partnerSettlement.sarwarNetDue)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">{getPartnerName('Wazham')} ({equityRatio.Wazham}%)</td>
+                          <td className="p-3">{formatIQD(partnerSettlement.wazhamEntitled)}</td>
+                          <td className="p-3 text-amber-600">-{formatIQD(partnerSettlement.wazhamWithdrawn)}</td>
+                          <td className="p-3 text-rose-600 font-bold">-{formatIQD(partnerSettlement.wazhamLoan)}</td>
+                          <td className={`p-3 ${isRtl ? 'text-left' : 'text-right'} font-black text-purple-600`}>
+                            {formatIQD(partnerSettlement.wazhamNetDue)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setIsSettlementModalOpen(false)}
+                      className="px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl"
+                    >
+                      {t.closeSimulator}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <footer className="mt-16 border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+            <p>{t.footerText}</p>
+          </footer>
+        </div>
+      );
+    }
+
+    // Mount to DOM
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
