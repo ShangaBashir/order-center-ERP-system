@@ -1407,6 +1407,8 @@
       const [selectedPartnerFilter, setSelectedPartnerFilter] = useState('all');
       const [selectedTypeFilter, setSelectedTypeFilter] = useState('all');
       const [dateFilter, setDateFilter] = useState('all');
+      const [txCurrentPage, setTxCurrentPage] = useState(1);
+      const TXS_PER_PAGE = 10;
 
       // Modals
       const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -1823,6 +1825,50 @@
           return searchMatch && accountMatch && partnerMatch && typeMatch && dateMatch;
         }).sort((a, b) => new Date(b.date) - new Date(a.date));
       }, [transactions, searchQuery, selectedAccountFilter, selectedPartnerFilter, selectedTypeFilter, dateFilter]);
+
+      // Reset transaction page to 1 on filter or search changes
+      useEffect(() => {
+        setTxCurrentPage(1);
+      }, [searchQuery, selectedAccountFilter, selectedPartnerFilter, selectedTypeFilter, dateFilter]);
+
+      const totalTxPages = Math.max(1, Math.ceil(filteredTransactions.length / TXS_PER_PAGE));
+
+      useEffect(() => {
+        if (txCurrentPage > totalTxPages) {
+          setTxCurrentPage(totalTxPages);
+        }
+      }, [totalTxPages, txCurrentPage]);
+
+      const paginatedTransactions = useMemo(() => {
+        const startIdx = (txCurrentPage - 1) * TXS_PER_PAGE;
+        return filteredTransactions.slice(startIdx, startIdx + TXS_PER_PAGE);
+      }, [filteredTransactions, txCurrentPage]);
+
+      const txStartIndex = filteredTransactions.length === 0 ? 0 : (txCurrentPage - 1) * TXS_PER_PAGE + 1;
+      const txEndIndex = Math.min(txCurrentPage * TXS_PER_PAGE, filteredTransactions.length);
+
+      const getTxPageNumbers = () => {
+        if (totalTxPages <= 7) {
+          return Array.from({ length: totalTxPages }, (_, i) => i + 1);
+        }
+        const pages = [];
+        if (txCurrentPage <= 4) {
+          for (let i = 1; i <= 5; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalTxPages);
+        } else if (txCurrentPage >= totalTxPages - 3) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = totalTxPages - 4; i <= totalTxPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = txCurrentPage - 1; i <= txCurrentPage + 1; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalTxPages);
+        }
+        return pages;
+      };
 
       // Category breakdown
       const categoryBreakdown = useMemo(() => {
@@ -4057,7 +4103,7 @@
                     <>
                       {/* Mobile Cards View (Phones & Small Tablets < md) */}
                       <div className="md:hidden divide-y divide-slate-100">
-                        {filteredTransactions.map((tx) => {
+                        {paginatedTransactions.map((tx) => {
                           const amtIQD = toIQD(tx);
                           const fromAcc = ACCOUNTS[tx.accountId];
                           const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
@@ -4184,7 +4230,7 @@
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 text-sm">
-                            {filteredTransactions.map((tx) => {
+                            {paginatedTransactions.map((tx) => {
                               const amtIQD = toIQD(tx);
                               const fromAcc = ACCOUNTS[tx.accountId];
                               const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
@@ -4291,6 +4337,70 @@
                             })}
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Pagination Controls */}
+                      <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+                        <div className="text-slate-500 font-medium">
+                          {lang === 'ku' ? (
+                            <>
+                              پیشاندانی <span className="font-bold text-slate-800">{txStartIndex}</span> تا <span className="font-bold text-slate-800">{txEndIndex}</span> لە <span className="font-bold text-slate-800">{filteredTransactions.length}</span> مامەڵە <span className="text-slate-400 font-normal">({`لاپەڕەی ${txCurrentPage} لە ${totalTxPages}`})</span>
+                            </>
+                          ) : (
+                            <>
+                              Showing <span className="font-bold text-slate-800">{txStartIndex}</span> to <span className="font-bold text-slate-800">{txEndIndex}</span> of <span className="font-bold text-slate-800">{filteredTransactions.length}</span> Transactions <span className="text-slate-400 font-normal">({`Page ${txCurrentPage} of ${totalTxPages}`})</span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
+                          <button
+                            type="button"
+                            onClick={() => setTxCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={txCurrentPage === 1}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <Icon name={isRtl ? "chevron-right" : "chevron-left"} className="w-3.5 h-3.5" />
+                            <span>{lang === 'ku' ? 'پێشوو' : 'Prev'}</span>
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            {getTxPageNumbers().map((pageNum, idx) => {
+                              if (pageNum === '...') {
+                                return (
+                                  <span key={`tx-ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-slate-400 font-bold text-xs select-none">
+                                    ...
+                                  </span>
+                                );
+                              }
+                              const isActive = pageNum === txCurrentPage;
+                              return (
+                                <button
+                                  key={`tx-page-${pageNum}`}
+                                  type="button"
+                                  onClick={() => setTxCurrentPage(pageNum)}
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm transition cursor-pointer ${
+                                    isActive
+                                      ? 'bg-[#711612] text-white shadow-sm ring-1 ring-[#711612]'
+                                      : 'text-slate-700 hover:bg-slate-100 border border-transparent'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setTxCurrentPage((p) => Math.min(totalTxPages, p + 1))}
+                            disabled={txCurrentPage === totalTxPages}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <span>{lang === 'ku' ? 'دواتر' : 'Next'}</span>
+                            <Icon name={isRtl ? "chevron-left" : "chevron-right"} className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
