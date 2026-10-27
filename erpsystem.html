@@ -907,12 +907,21 @@
       }, []);
 
       // Transactions Store (Fresh, clean start)
+      // Transactions Store (Fresh, clean start with historical exchange rate locking)
       const [transactions, setTransactions] = useState(() => {
         const saved = localStorage.getItem('ordercenter_erp_v1_txs');
+        const defaultRate = Number(localStorage.getItem('ordercenter_usd_rate')) || 1500;
         if (!saved) return [];
         try {
           const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
+          if (Array.isArray(parsed)) {
+            return parsed.map(tx => ({
+              ...tx,
+              exchangeRate: tx.exchangeRate || defaultRate,
+              amountIQD: tx.amountIQD !== undefined ? tx.amountIQD : (tx.currency === 'USD' ? (Number(tx.amount) * (tx.exchangeRate || defaultRate)) : Number(tx.amount))
+            }));
+          }
+          return [];
         } catch (e) {
           return [];
         }
@@ -1084,13 +1093,20 @@
 
       const [equityRatio, setEquityRatio] = useState({ Sarwar: 50, Wazham: 50 });
 
-      // Loan Management State
+      // Loan Management State (with historical exchange rate locking)
       const [loans, setLoans] = useState(() => {
         const saved = localStorage.getItem('ordercenter_loans_v1');
+        const defaultRate = Number(localStorage.getItem('ordercenter_usd_rate')) || 1500;
         if (!saved) return [];
         try {
           const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
+          if (Array.isArray(parsed)) {
+            return parsed.map(l => ({
+              ...l,
+              exchangeRate: l.exchangeRate || defaultRate
+            }));
+          }
+          return [];
         } catch (e) {
           return [];
         }
@@ -1190,9 +1206,26 @@
       };
 
       // Currency Helpers
-      const toIQD = (amount, currency) => {
-        const val = Number(amount) || 0;
-        return currency === 'USD' ? val * exchangeRate : val;
+      // Currency Helpers (Uses transaction-specific locked exchange rate so past data never shifts)
+      const toIQD = (amountOrItem, currency, itemExchangeRate = null) => {
+        if (typeof amountOrItem === 'object' && amountOrItem !== null) {
+          const item = amountOrItem;
+          if (item.currency !== 'USD') {
+            return Number(item.amount !== undefined ? item.amount : item.remainingAmount) || 0;
+          }
+          if (item.amountIQD !== undefined && item.amount !== undefined) {
+            return Number(item.amountIQD) || 0;
+          }
+          const rate = Number(item.exchangeRate) || Number(itemExchangeRate) || exchangeRate;
+          const val = Number(item.amount !== undefined ? item.amount : item.remainingAmount) || 0;
+          return val * rate;
+        }
+        const val = Number(amountOrItem) || 0;
+        if (currency === 'USD') {
+          const rate = Number(itemExchangeRate) || exchangeRate;
+          return val * rate;
+        }
+        return val;
       };
 
       const formatIQD = (val) => {
@@ -1203,8 +1236,9 @@
         }).format(val || 0).replace('IQD', lang === 'ku' ? 'د.ع' : 'IQD');
       };
 
-      const formatUSD = (val) => {
-        const usd = (val || 0) / (exchangeRate || 1500);
+      const formatUSD = (valIQD, customRate = null) => {
+        const rate = Number(customRate) || exchangeRate || 1500;
+        const usd = (Number(valIQD) || 0) / rate;
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD',
@@ -1223,7 +1257,7 @@
         };
 
         transactions.forEach((tx) => {
-          const amtIQD = toIQD(tx.amount, tx.currency);
+          const amtIQD = toIQD(tx.amount, tx.currency, tx.exchangeRate);
           if (tx.type === 'income') {
             balances[tx.accountId] = (balances[tx.accountId] || 0) + amtIQD;
           } else if (tx.type === 'expense' || tx.type === 'withdrawal') {
@@ -1251,7 +1285,7 @@
         let partnerLoans = { Sarwar: 0, Wazham: 0 };
 
         transactions.forEach((tx) => {
-          const amtIQD = toIQD(tx.amount, tx.currency);
+          const amtIQD = toIQD(tx.amount, tx.currency, tx.exchangeRate);
           const cat = (tx.category || '').toLowerCase();
           const isLoan = cat.includes('loan') || cat.includes('advance');
 
@@ -1279,7 +1313,7 @@
         const loansFromState = { Sarwar: 0, Wazham: 0 };
         loans.forEach(l => {
           if (l.status === 'active' && loansFromState[l.partner] !== undefined) {
-            loansFromState[l.partner] += toIQD(l.remainingAmount, l.currency);
+            loansFromState[l.partner] += toIQD(l.remainingAmount, l.currency, l.exchangeRate);
           }
         });
 
@@ -1367,12 +1401,15 @@
         if (!txForm.amount || Number(txForm.amount) <= 0) return;
 
         const autoRef = txForm.refNumber || generateNextInvoiceNumber(transactions);
+        const lockedRate = editingTx?.exchangeRate || exchangeRate;
         const newTx = {
           id: editingTx ? editingTx.id : `TX-${Date.now().toString().slice(-5)}`,
           refNumber: autoRef,
           type: txForm.type,
           amount: Number(txForm.amount),
           currency: txForm.currency,
+          exchangeRate: lockedRate,
+          amountIQD: txForm.currency === 'USD' ? Number(txForm.amount) * lockedRate : Number(txForm.amount),
           accountId: txForm.accountId,
           toAccountId: txForm.type === 'transfer' ? txForm.toAccountId : null,
           partner: txForm.partner,
@@ -1405,6 +1442,8 @@
           type: 'transfer',
           amount: Number(transferForm.amount),
           currency: transferForm.currency,
+          exchangeRate: exchangeRate,
+          amountIQD: transferForm.currency === 'USD' ? Number(transferForm.amount) * exchangeRate : Number(transferForm.amount),
           accountId: transferForm.fromAccountId,
           toAccountId: transferForm.toAccountId,
           partner: transferForm.partner,
@@ -1532,6 +1571,7 @@
 
         const loanId = `LN-${Date.now().toString().slice(-5)}`;
         const invoiceNum = generateNextInvoiceNumber(transactions);
+        const lockedRate = editingLoan?.exchangeRate || exchangeRate;
 
         const newTx = {
           id: `TX-${Date.now().toString().slice(-5)}`,
@@ -1539,6 +1579,8 @@
           type: txType,
           amount: amt,
           currency: loanForm.currency,
+          exchangeRate: lockedRate,
+          amountIQD: loanForm.currency === 'USD' ? amt * lockedRate : amt,
           accountId: loanForm.accountId,
           toAccountId: null,
           partner: loanForm.partner,
@@ -1554,6 +1596,7 @@
           personName: person,
           amount: amt,
           currency: loanForm.currency,
+          exchangeRate: lockedRate,
           accountId: loanForm.accountId,
           remainingAmount: amt,
           status: 'active',
@@ -1584,6 +1627,7 @@
 
         const invoiceNum = generateNextInvoiceNumber(transactions);
         const isBorrowed = repayingLoan.direction === 'borrowed';
+        const lockedRate = repayingLoan.exchangeRate || exchangeRate;
 
         const txType = isBorrowed ? 'expense' : 'income';
         const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Client Fee Recovery';
@@ -1597,6 +1641,8 @@
           type: txType,
           amount: repayAmt,
           currency: repayingLoan.currency,
+          exchangeRate: lockedRate,
+          amountIQD: repayingLoan.currency === 'USD' ? repayAmt * lockedRate : repayAmt,
           accountId: repayForm.accountId,
           toAccountId: null,
           partner: repayingLoan.partner,
@@ -2994,6 +3040,16 @@
                         <span className="hidden sm:inline">{t.newTransaction}</span>
                         <span className="sm:hidden font-extrabold">New</span>
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openLoanModal('Sarwar')}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow transition"
+                        title={lang === 'ku' ? 'تۆمارکردنی قەرز' : 'Record Loan'}
+                      >
+                        <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">{lang === 'ku' ? '+ قەرز' : '+ Loan'}</span>
+                      </button>
                     </>
                   )}
 
@@ -3401,10 +3457,19 @@
                         </button>
                         <button
                           onClick={() => openNewTxModal('income')}
-                          className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                          className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-[#711612] hover:bg-[#5A0E0B] text-white font-bold text-xs rounded-xl shadow-md transition"
                         >
                           <Icon name="plus-circle" className="w-4 h-4" />
                           <span>{t.addEntry}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openLoanModal('Sarwar')}
+                          className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                          title={lang === 'ku' ? 'تۆمارکردنی قەرزی هاوبەش' : 'Record Partner Loan'}
+                        >
+                          <Icon name="hand-coins" className="w-4 h-4" />
+                          <span>{lang === 'ku' ? '+ قەرز' : '+ Add Loan'}</span>
                         </button>
                       </div>
                     )}
@@ -3511,13 +3576,23 @@
                       <p className="text-sm sm:text-base font-bold text-slate-700">{t.noRecords}</p>
                       <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">{t.noRecordsSub}</p>
                       {isAdmin && (
-                        <button
-                          onClick={() => openNewTxModal('income')}
-                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition"
-                        >
-                          <Icon name="plus-circle" className="w-4 h-4" />
-                          <span>{t.addEntry}</span>
-                        </button>
+                        <div className="mt-4 flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openNewTxModal('income')}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#711612] hover:bg-[#5A0E0B] text-white rounded-xl text-xs font-bold shadow transition"
+                          >
+                            <Icon name="plus-circle" className="w-4 h-4" />
+                            <span>{t.addEntry}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openLoanModal('Sarwar')}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow transition"
+                          >
+                            <Icon name="hand-coins" className="w-4 h-4" />
+                            <span>{lang === 'ku' ? '+ قەرزی هاوبەش' : '+ Add Loan'}</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -4709,7 +4784,7 @@
                   {/* Type buttons */}
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {[
                         { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500' },
                         { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500' },
@@ -4731,15 +4806,29 @@
                             }}
                             className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition ${
                               isSelected
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                ? 'bg-[#711612] text-white border-[#711612] shadow-md'
                                 : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                             }`}
                           >
                             <Icon name={tItem.icon} className={`w-4 h-4 ${isSelected ? 'text-white' : tItem.color}`} />
-                            <span>{tItem.label}</span>
+                            <span className="truncate">{tItem.label}</span>
                           </button>
                         );
                       })}
+
+                      {/* Partner Loan Button inside Transaction Classification */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeTxModal();
+                          openLoanModal(txForm.partner || 'Sarwar');
+                        }}
+                        className="flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition bg-rose-50/80 text-rose-700 border-rose-200 hover:bg-rose-600 hover:text-white group"
+                        title={lang === 'ku' ? 'تۆمارکردنی قەرزی هاوبەش' : 'Record Partner Loan'}
+                      >
+                        <Icon name="hand-coins" className="w-4 h-4 text-rose-600 group-hover:text-white transition" />
+                        <span className="truncate">{lang === 'ku' ? 'قەرزی هاوبەش' : 'Partner Loan'}</span>
+                      </button>
                     </div>
                   </div>
 
