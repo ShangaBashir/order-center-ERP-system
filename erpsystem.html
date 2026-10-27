@@ -1409,6 +1409,8 @@
       const [dateFilter, setDateFilter] = useState('all');
       const [txCurrentPage, setTxCurrentPage] = useState(1);
       const TXS_PER_PAGE = 10;
+      const [recentTxCurrentPage, setRecentTxCurrentPage] = useState(1);
+      const RECENT_TXS_PER_PAGE = 10;
 
       // Modals
       const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -1866,6 +1868,50 @@
           for (let i = txCurrentPage - 1; i <= txCurrentPage + 1; i++) pages.push(i);
           pages.push('...');
           pages.push(totalTxPages);
+        }
+        return pages;
+      };
+
+      // Dashboard Recent Transactions Pagination
+      const sortedRecentTransactions = useMemo(() => {
+        return [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+      }, [transactions]);
+
+      const totalRecentTxPages = Math.max(1, Math.ceil(sortedRecentTransactions.length / RECENT_TXS_PER_PAGE));
+
+      useEffect(() => {
+        if (recentTxCurrentPage > totalRecentTxPages) {
+          setRecentTxCurrentPage(totalRecentTxPages);
+        }
+      }, [totalRecentTxPages, recentTxCurrentPage]);
+
+      const paginatedRecentTransactions = useMemo(() => {
+        const startIdx = (recentTxCurrentPage - 1) * RECENT_TXS_PER_PAGE;
+        return sortedRecentTransactions.slice(startIdx, startIdx + RECENT_TXS_PER_PAGE);
+      }, [sortedRecentTransactions, recentTxCurrentPage]);
+
+      const recentTxStartIndex = sortedRecentTransactions.length === 0 ? 0 : (recentTxCurrentPage - 1) * RECENT_TXS_PER_PAGE + 1;
+      const recentTxEndIndex = Math.min(recentTxCurrentPage * RECENT_TXS_PER_PAGE, sortedRecentTransactions.length);
+
+      const getRecentTxPageNumbers = () => {
+        if (totalRecentTxPages <= 7) {
+          return Array.from({ length: totalRecentTxPages }, (_, i) => i + 1);
+        }
+        const pages = [];
+        if (recentTxCurrentPage <= 4) {
+          for (let i = 1; i <= 5; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalRecentTxPages);
+        } else if (recentTxCurrentPage >= totalRecentTxPages - 3) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = totalRecentTxPages - 4; i <= totalRecentTxPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = recentTxCurrentPage - 1; i <= recentTxCurrentPage + 1; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalRecentTxPages);
         }
         return pages;
       };
@@ -3880,49 +3926,115 @@
                       <p className="mt-1">{t.noRecordsSub}</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
-                      {transactions.slice(0, 5).map((tx) => (
-                        <div key={tx.id} className="py-3.5 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              tx.type === 'income' ? 'bg-emerald-100 text-emerald-700' :
-                              tx.type === 'expense' ? 'bg-rose-100 text-rose-700' :
-                              tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-700' :
-                              'bg-blue-100 text-blue-700'
-                            }`}>
-                              <Icon name={
-                                tx.type === 'income' ? 'arrow-down-left' :
-                                tx.type === 'expense' ? 'arrow-up-right' :
-                                tx.type === 'withdrawal' ? 'user-check' : 'arrow-left-right'
-                              } className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-slate-800">{tx.category}</span>
-                                <span className="text-[11px] font-mono text-slate-400">#{tx.refNumber || tx.id}</span>
+                    <>
+                      <div className="divide-y divide-slate-100">
+                        {paginatedRecentTransactions.map((tx) => (
+                          <div key={tx.id} className="py-3.5 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                tx.type === 'income' ? 'bg-emerald-100 text-emerald-700' :
+                                tx.type === 'expense' ? 'bg-rose-100 text-rose-700' :
+                                tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                <Icon name={
+                                  tx.type === 'income' ? 'arrow-down-left' :
+                                  tx.type === 'expense' ? 'arrow-up-right' :
+                                  tx.type === 'withdrawal' ? 'user-check' : 'arrow-left-right'
+                                } className="w-5 h-5" />
                               </div>
-                              <p className="text-xs text-slate-500 truncate max-w-sm sm:max-w-md">
-                                {tx.notes}
-                              </p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-slate-800">{tx.category}</span>
+                                  <span className="text-[11px] font-mono text-slate-400">#{tx.refNumber || tx.id}</span>
+                                </div>
+                                <p className="text-xs text-slate-500 truncate max-w-sm sm:max-w-md">
+                                  {tx.notes}
+                                </p>
+                              </div>
                             </div>
+
+                            <div className={`${isRtl ? 'text-left' : 'text-right'} shrink-0`}>
+                              <div className={`text-sm font-black ${
+                                tx.type === 'income' ? 'text-emerald-600' :
+                                tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
+                                'text-blue-600'
+                              }`}>
+                                {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
+                                {formatIQD(toIQD(tx))}
+                              </div>
+                              <span className="text-[11px] text-slate-400">
+                                {new Date(tx.date).toLocaleDateString()} • {getAccountShortName(ACCOUNTS[tx.accountId])}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Dashboard Recent Transactions Pagination */}
+                      <div className="p-4 sm:p-5 mt-2 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+                        <div className="text-slate-500 font-medium">
+                          {lang === 'ku' ? (
+                            <>
+                              پیشاندانی <span className="font-bold text-slate-800">{recentTxStartIndex}</span> تا <span className="font-bold text-slate-800">{recentTxEndIndex}</span> لە <span className="font-bold text-slate-800">{sortedRecentTransactions.length}</span> مامەڵە <span className="text-slate-400 font-normal">({`لاپەڕەی ${recentTxCurrentPage} لە ${totalRecentTxPages}`})</span>
+                            </>
+                          ) : (
+                            <>
+                              Showing <span className="font-bold text-slate-800">{recentTxStartIndex}</span> to <span className="font-bold text-slate-800">{recentTxEndIndex}</span> of <span className="font-bold text-slate-800">{sortedRecentTransactions.length}</span> Transactions <span className="text-slate-400 font-normal">({`Page ${recentTxCurrentPage} of ${totalRecentTxPages}`})</span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
+                          <button
+                            type="button"
+                            onClick={() => setRecentTxCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={recentTxCurrentPage === 1}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <Icon name={isRtl ? "chevron-right" : "chevron-left"} className="w-3.5 h-3.5" />
+                            <span>{lang === 'ku' ? 'پێشوو' : 'Prev'}</span>
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            {getRecentTxPageNumbers().map((pageNum, idx) => {
+                              if (pageNum === '...') {
+                                return (
+                                  <span key={`recent-ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-slate-400 font-bold text-xs select-none">
+                                    ...
+                                  </span>
+                                );
+                              }
+                              const isActive = pageNum === recentTxCurrentPage;
+                              return (
+                                <button
+                                  key={`recent-page-${pageNum}`}
+                                  type="button"
+                                  onClick={() => setRecentTxCurrentPage(pageNum)}
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm transition cursor-pointer ${
+                                    isActive
+                                      ? 'bg-[#711612] text-white shadow-sm ring-1 ring-[#711612]'
+                                      : 'text-slate-700 hover:bg-slate-100 border border-transparent'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
                           </div>
 
-                          <div className={`${isRtl ? 'text-left' : 'text-right'} shrink-0`}>
-                            <div className={`text-sm font-black ${
-                              tx.type === 'income' ? 'text-emerald-600' :
-                              tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
-                              'text-blue-600'
-                            }`}>
-                              {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
-                              {formatIQD(toIQD(tx))}
-                            </div>
-                            <span className="text-[11px] text-slate-400">
-                              {new Date(tx.date).toLocaleDateString()} • {getAccountShortName(ACCOUNTS[tx.accountId])}
-                            </span>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setRecentTxCurrentPage((p) => Math.min(totalRecentTxPages, p + 1))}
+                            disabled={recentTxCurrentPage === totalRecentTxPages}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <span>{lang === 'ku' ? 'دواتر' : 'Next'}</span>
+                            <Icon name={isRtl ? "chevron-left" : "chevron-right"} className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
