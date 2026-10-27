@@ -709,8 +709,21 @@
                 api.getTransactions(),
                 api.getBalances()
               ]);
-              setTransactions(serverTxs);
-              setOpeningBalances(serverBalances);
+              if (serverTxs && Array.isArray(serverTxs) && serverTxs.length > 0) {
+                const sanitized = serverTxs.map(tx => {
+                  const rate = Number(tx.exchangeRate) || 1500;
+                  const amtIQD = tx.amountIQD !== undefined && tx.amountIQD !== null
+                    ? Number(tx.amountIQD)
+                    : (tx.currency === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
+                  return { ...tx, exchangeRate: rate, amountIQD: amtIQD };
+                });
+                setTransactions(sanitized);
+                localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(sanitized));
+              }
+              if (serverBalances) {
+                setOpeningBalances(serverBalances);
+                localStorage.setItem('ordercenter_opening_balances', JSON.stringify(serverBalances));
+              }
 
               if (me.role === 'admin') {
                 const serverUsers = await api.getUsers();
@@ -1369,6 +1382,13 @@
         return saved ? Number(saved) : INITIAL_SYSTEM_DATA.exchangeRate;
       });
 
+      // Editable Exchange Rate temporary form state for Settings Tab
+      const [exchangeRateForm, setExchangeRateForm] = useState(exchangeRate);
+
+      useEffect(() => {
+        setExchangeRateForm(exchangeRate);
+      }, [exchangeRate]);
+
       // Current active tab: 'dashboard' | 'transactions' | 'partners' | 'analytics' | 'settings'
       const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -1628,23 +1648,25 @@
       };
 
       // Currency Helpers
-      // Currency Helpers (Uses transaction-specific locked exchange rate so past data never shifts)
+      // Currency Helpers (Strict historical locking: past records & loans NEVER recalculate or shift when global rate changes)
       const toIQD = (amountOrItem, currency, itemExchangeRate = null) => {
         if (typeof amountOrItem === 'object' && amountOrItem !== null) {
           const item = amountOrItem;
-          if (item.currency !== 'USD') {
-            return Number(item.amount !== undefined ? item.amount : item.remainingAmount) || 0;
+          const curr = item.currency || currency || 'IQD';
+          const val = Number(item.amount !== undefined ? item.amount : (item.remainingAmount !== undefined ? item.remainingAmount : 0)) || 0;
+          if (curr !== 'USD') {
+            return val;
           }
-          if (item.amountIQD !== undefined && item.amount !== undefined) {
+          if (item.amountIQD !== undefined && item.amountIQD !== null) {
             return Number(item.amountIQD) || 0;
           }
-          const rate = Number(item.exchangeRate) || Number(itemExchangeRate) || exchangeRate;
-          const val = Number(item.amount !== undefined ? item.amount : item.remainingAmount) || 0;
-          return val * rate;
+          const lockedRate = Number(item.exchangeRate) || Number(itemExchangeRate) || 1500;
+          return val * lockedRate;
         }
+
         const val = Number(amountOrItem) || 0;
         if (currency === 'USD') {
-          const rate = Number(itemExchangeRate) || exchangeRate;
+          const rate = Number(itemExchangeRate) || 1500;
           return val * rate;
         }
         return val;
@@ -1679,7 +1701,7 @@
         };
 
         transactions.forEach((tx) => {
-          const amtIQD = toIQD(tx.amount, tx.currency, tx.exchangeRate);
+          const amtIQD = toIQD(tx);
           if (tx.type === 'income') {
             balances[tx.accountId] = (balances[tx.accountId] || 0) + amtIQD;
           } else if (tx.type === 'expense' || tx.type === 'withdrawal') {
@@ -1692,7 +1714,7 @@
           }
         });
         return balances;
-      }, [transactions, openingBalances, exchangeRate]);
+      }, [transactions, openingBalances]);
 
       // Total Liquidity
       const totalConsolidatedLiquidity = useMemo(() => {
@@ -1707,7 +1729,7 @@
         let partnerLoans = { Sarwar: 0, Wazham: 0 };
 
         transactions.forEach((tx) => {
-          const amtIQD = toIQD(tx.amount, tx.currency, tx.exchangeRate);
+          const amtIQD = toIQD(tx);
           const cat = (tx.category || '').toLowerCase();
           const isLoan = cat.includes('loan') || cat.includes('advance');
 
@@ -1735,7 +1757,7 @@
         const loansFromState = { Sarwar: 0, Wazham: 0 };
         loans.forEach(l => {
           if (l.status === 'active' && loansFromState[l.partner] !== undefined) {
-            loansFromState[l.partner] += toIQD(l.remainingAmount, l.currency, l.exchangeRate);
+            loansFromState[l.partner] += toIQD({ ...l, amount: l.remainingAmount });
           }
         });
 
@@ -1757,7 +1779,7 @@
           partnerWithdrawals,
           partnerLoans: effectivePartnerLoans
         };
-      }, [transactions, loans, exchangeRate]);
+      }, [transactions, loans]);
 
       // Filtered Transactions
       const filteredTransactions = useMemo(() => {
@@ -1807,7 +1829,7 @@
         const incomeCats = {};
         const expenseCats = {};
         transactions.forEach((tx) => {
-          const amt = toIQD(tx.amount, tx.currency);
+          const amt = toIQD(tx);
           if (tx.type === 'income') {
             incomeCats[tx.category] = (incomeCats[tx.category] || 0) + amt;
           } else if (tx.type === 'expense') {
@@ -1815,7 +1837,7 @@
           }
         });
         return { incomeCats, expenseCats };
-      }, [transactions, exchangeRate]);
+      }, [transactions]);
 
       // Action Handlers
       const handleSaveTransaction = (e) => {
@@ -2157,18 +2179,32 @@
         });
       };
 
-      // Save Opening Balances from Settings Tab
-      const handleSaveOpeningBalances = (e) => {
+      // Save Opening Balances & Exchange Rate from Settings Tab
+      const handleSaveOpeningBalances = async (e) => {
         e.preventDefault();
-        const updated = {
+        const updatedBalances = {
           fib: Math.max(0, Number(openingForm.fib) || 0),
           cihan: Math.max(0, Number(openingForm.cihan) || 0),
           qi: Math.max(0, Number(openingForm.qi) || 0),
           hyperpost: Math.max(0, Number(openingForm.hyperpost) || 0),
           cash: Math.max(0, Number(openingForm.cash) || 0)
         };
-        setOpeningBalances(updated);
-        triggerToast(lang === 'ku' ? 'باڵانسی سەرەتایی هەژمارەکان پاشەکەوت کرا' : 'Opening balances saved successfully!');
+        const newRate = Math.max(1, Number(exchangeRateForm) || 1500);
+
+        setOpeningBalances(updatedBalances);
+        setExchangeRate(newRate);
+        localStorage.setItem('ordercenter_opening_balances', JSON.stringify(updatedBalances));
+        localStorage.setItem('ordercenter_usd_rate', newRate.toString());
+
+        if (typeof api !== 'undefined' && api.setBalances) {
+          try {
+            await api.setBalances(updatedBalances);
+          } catch (err) {
+            console.warn('Could not sync balances to server:', err);
+          }
+        }
+
+        triggerToast(lang === 'ku' ? 'ڕێکخستنەکان و نرخی دۆلار پاشەکەوت کران (داتای پێشتر نەگۆڕاوە)' : 'Settings & USD Rate saved! Previous data remains locked.');
       };
 
       const exportCSV = () => {
@@ -2180,7 +2216,7 @@
           tx.type.toUpperCase(),
           tx.amount,
           tx.currency,
-          toIQD(tx.amount, tx.currency),
+          toIQD(tx),
           ACCOUNTS[tx.accountId]?.name || tx.accountId,
           tx.toAccountId ? ACCOUNTS[tx.toAccountId]?.name : 'N/A',
           tx.partner,
@@ -2334,7 +2370,7 @@
               </thead>
               <tbody>
                 {filteredTransactions.map((tx, idx) => {
-                  const amtIQD = toIQD(tx.amount, tx.currency);
+                  const amtIQD = toIQD(tx);
                   const fromAcc = ACCOUNTS[tx.accountId];
                   const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
 
@@ -3025,7 +3061,7 @@
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">{lang === 'ku' ? 'بڕی ماوەی قەرز:' : 'Remaining Debt:'}</span>
                     <span className="font-black text-rose-600 font-mono">
-                      {formatIQD(toIQD(repayingLoan.remainingAmount, repayingLoan.currency))}
+                      {formatIQD(toIQD({ ...repayingLoan, amount: repayingLoan.remainingAmount }))}
                     </span>
                   </div>
                 </div>
@@ -3162,10 +3198,10 @@
                     <div className={`text-xl sm:text-2xl font-black mt-0.5 ${
                       viewingLoan.direction === 'borrowed' ? 'text-emerald-600' : 'text-rose-600'
                     }`}>
-                      {formatIQD(toIQD(viewingLoan.amount, viewingLoan.currency))}
+                      {formatIQD(toIQD(viewingLoan))}
                     </div>
                     <span className="text-xs text-slate-400 font-semibold">
-                      ≈ {formatUSD(toIQD(viewingLoan.amount, viewingLoan.currency))} ({viewingLoan.amount.toLocaleString()} {viewingLoan.currency})
+                      ≈ {viewingLoan.currency === 'USD' ? '$' + Number(viewingLoan.amount).toLocaleString() : formatUSD(toIQD(viewingLoan), viewingLoan.exchangeRate)} ({viewingLoan.amount.toLocaleString()} {viewingLoan.currency})
                     </span>
                   </div>
                   <div className="text-right space-y-1">
@@ -3221,7 +3257,7 @@
                     <span className={`font-black mt-1 block font-mono text-sm ${
                       viewingLoan.remainingAmount <= 0 ? 'text-slate-400' : 'text-rose-600'
                     }`}>
-                      {formatIQD(toIQD(viewingLoan.remainingAmount, viewingLoan.currency))}
+                      {formatIQD(toIQD({ ...viewingLoan, amount: viewingLoan.remainingAmount }))}
                     </span>
                   </div>
 
@@ -3327,9 +3363,9 @@
                       'text-blue-600'
                     }`}>
                       {viewingTx.type === 'income' ? '+' : viewingTx.type === 'expense' || viewingTx.type === 'withdrawal' ? '-' : ''}
-                      {formatIQD(toIQD(viewingTx.amount, viewingTx.currency))}
+                      {formatIQD(toIQD(viewingTx))}
                     </div>
-                    <span className="text-xs text-slate-400 font-semibold">≈ {formatUSD(toIQD(viewingTx.amount, viewingTx.currency))} ({viewingTx.amount.toLocaleString()} {viewingTx.currency})</span>
+                    <span className="text-xs text-slate-400 font-semibold">≈ {viewingTx.currency === 'USD' ? '$' + Number(viewingTx.amount).toLocaleString() : formatUSD(toIQD(viewingTx), viewingTx.exchangeRate)} ({viewingTx.amount.toLocaleString()} {viewingTx.currency})</span>
                   </div>
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
                     viewingTx.type === 'income' ? 'bg-emerald-100 text-emerald-800' :
@@ -3832,7 +3868,7 @@
                               'text-blue-600'
                             }`}>
                               {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
-                              {formatIQD(toIQD(tx.amount, tx.currency))}
+                              {formatIQD(toIQD(tx))}
                             </div>
                             <span className="text-[11px] text-slate-400">
                               {new Date(tx.date).toLocaleDateString()} • {getAccountShortName(ACCOUNTS[tx.accountId])}
@@ -4022,7 +4058,7 @@
                       {/* Mobile Cards View (Phones & Small Tablets < md) */}
                       <div className="md:hidden divide-y divide-slate-100">
                         {filteredTransactions.map((tx) => {
-                          const amtIQD = toIQD(tx.amount, tx.currency);
+                          const amtIQD = toIQD(tx);
                           const fromAcc = ACCOUNTS[tx.accountId];
                           const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
 
@@ -4149,7 +4185,7 @@
                           </thead>
                           <tbody className="divide-y divide-slate-100 text-sm">
                             {filteredTransactions.map((tx) => {
-                              const amtIQD = toIQD(tx.amount, tx.currency);
+                              const amtIQD = toIQD(tx);
                               const fromAcc = ACCOUNTS[tx.accountId];
                               const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
 
@@ -4539,10 +4575,10 @@
                             <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60">
                               <div className={isRtl ? 'text-left' : 'text-right'}>
                                 <div className="text-xs text-slate-400 font-medium">
-                                  {lang === 'ku' ? 'بڕی قەرز:' : 'Original:'} <span className="font-mono">{formatIQD(toIQD(loan.amount, loan.currency))}</span>
+                                  {lang === 'ku' ? 'بڕی قەرز:' : 'Original:'} <span className="font-mono">{formatIQD(toIQD(loan))}</span>
                                 </div>
                                 <div className="text-sm font-black text-slate-900 font-mono">
-                                  {lang === 'ku' ? 'ماوە:' : 'Remaining:'} <span className={isPaid ? 'text-slate-400' : 'text-rose-600'}>{formatIQD(toIQD(loan.remainingAmount, loan.currency))}</span>
+                                  {lang === 'ku' ? 'ماوە:' : 'Remaining:'} <span className={isPaid ? 'text-slate-400' : 'text-rose-600'}>{formatIQD(toIQD({ ...loan, amount: loan.remainingAmount }))}</span>
                                 </div>
                               </div>
 
@@ -4624,7 +4660,7 @@
                           </div>
                           <div className={isRtl ? 'text-left' : 'text-right'}>
                             <span className="font-black text-rose-600 text-sm">
-                              -{formatIQD(toIQD(tx.amount, tx.currency))}
+                              -{formatIQD(toIQD(tx))}
                             </span>
                             <p className="text-[10px] text-slate-400">{new Date(tx.date).toLocaleDateString()}</p>
                           </div>
@@ -4809,7 +4845,7 @@
                       ))}
 
                       {/* USD Exchange Rate Setting */}
-                      <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-1.5 sm:col-span-2">
+                      <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-2 sm:col-span-2">
                         <label className="text-xs font-bold text-indigo-950 flex items-center justify-between">
                           <span className="flex items-center gap-1.5">
                             <Icon name="dollar-sign" className="w-4 h-4 text-indigo-600" />
@@ -4820,13 +4856,18 @@
                           <input
                             type="number"
                             min="100"
-                            value={exchangeRate}
-                            onChange={(e) => setExchangeRate(Number(e.target.value) || 1500)}
+                            value={exchangeRateForm}
+                            onChange={(e) => setExchangeRateForm(e.target.value)}
                             className="w-full p-2.5 bg-white border border-indigo-300 rounded-xl font-black text-base text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                           />
                         </div>
-                        <p className="text-[11px] text-indigo-700">
-                          {lang === 'ku' ? 'ئەم نرخە بۆ گۆڕینی دۆلار بۆ دینار لە سەرجەم ئەپەکەدا بەکاردێت.' : 'This rate is used across the system for currency conversions.'}
+                        <p className="text-[11px] text-emerald-800 font-medium flex items-center gap-1.5 bg-emerald-50/90 p-2.5 rounded-xl border border-emerald-200">
+                          <Icon name="shield-check" className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>
+                            {lang === 'ku'
+                              ? 'پارێزراوی مێژوویی: گۆڕینی ئەم نرخە تەنها بۆ جووڵە و تۆمارە نوێیەکان لەمەودوا بەکاردێت. سەرجەم داتاکان و تۆمارەکانی پێشوو بە تەواوی پارێزراون و ناگۆڕدرێن.'
+                              : 'Historical Lock Active: Changing this rate applies ONLY to new records added in the future. All previous transactions, balances, and records remain strictly locked.'}
+                          </span>
                         </p>
                       </div>
                     </div>
