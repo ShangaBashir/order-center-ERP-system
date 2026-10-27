@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
   <title>Order Center ERP - Treasury & Financial Management</title>
   
   <!-- Tailwind CSS CDN -->
@@ -87,18 +87,34 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
+    }
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     .font-nrt {
       font-family: 'Plus Jakarta Sans', sans-serif !important;
     }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .pb-safe {
+      padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem);
+    }
+    button, a, input, select, textarea {
+      touch-action: manipulation;
+    }
     @media print {
       @page { size: A4 portrait; margin: 12mm 10mm 15mm 10mm; }
       body { background-color: #ffffff !important; color: #0f172a !important; font-size: 11pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      header, footer, .no-print, button, input, select, .modal-overlay, #toast-container { display: none !important; }
+      header, footer, nav, .no-print, button, input, select, .modal-overlay, #toast-container { display: none !important; }
       .print-only-statement { display: block !important; }
       tr, .print-card { page-break-inside: avoid !important; break-inside: avoid !important; }
       table { width: 100% !important; border-collapse: collapse !important; }
@@ -153,7 +169,7 @@
         saveSettings: 'Save Settings & Balances',
         dangerZone: 'Data Management & Reset',
         dangerZoneDesc: 'Completely wipe all transaction history or reset opening balances.',
-        clearAllTxBtn: 'Wipe All Transactions',
+        clearAllTxBtn: 'Delete All Transactions',
         resetEverythingBtn: 'Reset Entire System (Zero Out All)',
         usdRateLabel: 'USD / IQD Exchange Rate (1 USD = ? IQD)',
         totalLiquidity: 'Total Consolidated Liquidity',
@@ -318,7 +334,7 @@
 
     const PARTNERS = ['Sarwar', 'Wazham'];
 
-    const TRANSACTION_CATEGORIES = {
+    const DEFAULT_CATEGORIES = {
       income: [
         'Delivery Settlement',
         'Merchant Commission',
@@ -339,6 +355,8 @@
       transfer: ['Internal Account Rebalance', 'Cash to Bank Deposit', 'Bank to Card Top-up'],
       withdrawal: ['Partner Drawing', 'Partner Loan / Advance', 'Dividend Payout', 'Personal Expense Reimbursement']
     };
+
+    const TRANSACTION_CATEGORIES = DEFAULT_CATEGORIES;
 
     
     
@@ -923,6 +941,15 @@
       // Current active tab: 'dashboard' | 'transactions' | 'partners' | 'analytics' | 'settings'
       const [activeTab, setActiveTab] = useState('dashboard');
 
+      // Authorization helper: Check if signed-in user is an administrator
+      const isAdmin = currentUser?.role === 'admin';
+
+      useEffect(() => {
+        if (!isAdmin && (activeTab === 'settings' || activeTab === 'users')) {
+          setActiveTab('dashboard');
+        }
+      }, [isAdmin, activeTab]);
+
       // Filters
       const [searchQuery, setSearchQuery] = useState('');
       const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
@@ -937,6 +964,99 @@
       const [editingTx, setEditingTx] = useState(null);
       const [toastMessage, setToastMessage] = useState(null);
       const [confirmDialog, setConfirmDialog] = useState(null);
+      const [viewingTx, setViewingTx] = useState(null);
+      const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+      const [deleteAllStep, setDeleteAllStep] = useState(1);
+      const [deleteAllPassword, setDeleteAllPassword] = useState('');
+      const [deleteAllError, setDeleteAllError] = useState('');
+
+      // Dynamic Transaction Categories with persistence
+      const [categories, setCategories] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_categories_v1');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && typeof parsed === 'object') {
+              return {
+                income: Array.isArray(parsed.income) && parsed.income.length > 0 ? parsed.income : DEFAULT_CATEGORIES.income,
+                expense: Array.isArray(parsed.expense) && parsed.expense.length > 0 ? parsed.expense : DEFAULT_CATEGORIES.expense,
+                transfer: Array.isArray(parsed.transfer) && parsed.transfer.length > 0 ? parsed.transfer : DEFAULT_CATEGORIES.transfer,
+                withdrawal: Array.isArray(parsed.withdrawal) && parsed.withdrawal.length > 0 ? parsed.withdrawal : DEFAULT_CATEGORIES.withdrawal
+              };
+            }
+          } catch (e) {}
+        }
+        return DEFAULT_CATEGORIES;
+      });
+
+      useEffect(() => {
+        localStorage.setItem('ordercenter_categories_v1', JSON.stringify(categories));
+      }, [categories]);
+
+      // Category Manager State
+      const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+      const [categoryManagerType, setCategoryManagerType] = useState('income');
+      const [newCategoryName, setNewCategoryName] = useState('');
+      const [categoryManagerError, setCategoryManagerError] = useState('');
+      const [categoryToDelete, setCategoryToDelete] = useState(null);
+
+      // Auto-generate sequential, unchangeable Order Invoice number
+      const generateNextInvoiceNumber = (txList = transactions) => {
+        let highestNum = 1000;
+        (txList || []).forEach(tx => {
+          const ref = tx.refNumber || tx.id || '';
+          const match = ref.match(/ORD-(\d+)/i);
+          if (match && match[1]) {
+            const n = parseInt(match[1], 10);
+            if (!isNaN(n) && n > highestNum) {
+              highestNum = n;
+            }
+          }
+        });
+        if (highestNum === 1000 && (txList || []).length > 0) {
+          highestNum = 1000 + (txList || []).length;
+        }
+        return `ORD-${highestNum + 1}`;
+      };
+
+      const handleAddCategory = (type, name) => {
+        const trimmed = (name || '').trim();
+        if (!trimmed) {
+          setCategoryManagerError(lang === 'ku' ? 'تکایە ناوی جۆرەکە بنووسە' : 'Please enter a category name');
+          return;
+        }
+        const currentList = categories[type] || [];
+        if (currentList.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+          setCategoryManagerError(lang === 'ku' ? 'ئەم جۆرە پێشتر بوونی هەیە' : 'This category already exists');
+          return;
+        }
+        const updatedList = [...currentList, trimmed];
+        setCategories(prev => ({
+          ...prev,
+          [type]: updatedList
+        }));
+        setTxForm(prev => ({ ...prev, category: trimmed }));
+        setNewCategoryName('');
+        setCategoryManagerError('');
+        triggerToast(lang === 'ku' ? `جۆری نوێ زیادکرا: ${trimmed}` : `Category added: ${trimmed}`);
+      };
+
+      const handleDeleteCategory = (type, categoryToDelete) => {
+        const currentList = categories[type] || [];
+        if (currentList.length <= 1) {
+          triggerToast(lang === 'ku' ? 'ناتوانیت هەموو جۆرەکان بسڕیتەوە' : 'Cannot delete the last remaining category');
+          return;
+        }
+        const updatedList = currentList.filter(c => c !== categoryToDelete);
+        setCategories(prev => ({
+          ...prev,
+          [type]: updatedList
+        }));
+        if (txForm.category === categoryToDelete) {
+          setTxForm(prev => ({ ...prev, category: updatedList[0] || 'General' }));
+        }
+        triggerToast(lang === 'ku' ? `جۆرەکە سڕایەوە: ${categoryToDelete}` : `Category deleted: ${categoryToDelete}`);
+      };
 
       // Form States
       const [txForm, setTxForm] = useState({
@@ -946,8 +1066,8 @@
         accountId: 'fib',
         toAccountId: 'cash',
         partner: 'Sarwar',
-        category: TRANSACTION_CATEGORIES.income[0],
-        refNumber: '',
+        category: DEFAULT_CATEGORIES.income[0],
+        refNumber: generateNextInvoiceNumber([]),
         notes: '',
         date: new Date().toISOString().slice(0, 16)
       });
@@ -963,6 +1083,89 @@
       });
 
       const [equityRatio, setEquityRatio] = useState({ Sarwar: 50, Wazham: 50 });
+
+      // Loan Management State
+      const [loans, setLoans] = useState(() => {
+        const saved = localStorage.getItem('ordercenter_loans_v1');
+        if (!saved) return [];
+        try {
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          return [];
+        }
+      });
+
+      useEffect(() => {
+        localStorage.setItem('ordercenter_loans_v1', JSON.stringify(loans));
+      }, [loans]);
+
+      const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
+      const [editingLoan, setEditingLoan] = useState(null);
+      const [viewingLoan, setViewingLoan] = useState(null);
+      const [loanForm, setLoanForm] = useState({
+        direction: 'borrowed', // 'borrowed' = Partner borrowed from someone | 'given' = Someone borrowed from partner
+        partner: 'Sarwar',
+        personName: '',
+        amount: '',
+        currency: 'IQD',
+        accountId: 'fib',
+        notes: '',
+        date: new Date().toISOString().slice(0, 16)
+      });
+
+      const [repayingLoan, setRepayingLoan] = useState(null);
+      const [repayForm, setRepayForm] = useState({
+        amount: '',
+        accountId: 'fib',
+        notes: '',
+        date: new Date().toISOString().slice(0, 16)
+      });
+
+      const [loanFilter, setLoanFilter] = useState('all'); // 'all' | 'active'
+
+      const openLoanModal = (partner = 'Sarwar', direction = 'borrowed') => {
+        if (!isAdmin) return;
+        setEditingLoan(null);
+        setLoanForm({
+          direction,
+          partner,
+          personName: '',
+          amount: '',
+          currency: 'IQD',
+          accountId: 'fib',
+          notes: '',
+          date: new Date().toISOString().slice(0, 16)
+        });
+        setIsLoanModalOpen(true);
+      };
+
+      const openEditLoanModal = (loan) => {
+        if (!isAdmin) return;
+        setEditingLoan(loan);
+        setLoanForm({
+          direction: loan.direction || 'borrowed',
+          partner: loan.partner || 'Sarwar',
+          personName: loan.personName || '',
+          amount: loan.amount.toString(),
+          currency: loan.currency || 'IQD',
+          accountId: loan.accountId || 'fib',
+          notes: loan.notes || '',
+          date: loan.date ? loan.date.slice(0, 16) : new Date().toISOString().slice(0, 16)
+        });
+        setIsLoanModalOpen(true);
+      };
+
+      const openRepayModal = (loan) => {
+        if (!isAdmin) return;
+        setRepayingLoan(loan);
+        setRepayForm({
+          amount: loan.remainingAmount.toString(),
+          accountId: loan.accountId || 'fib',
+          notes: '',
+          date: new Date().toISOString().slice(0, 16)
+        });
+      };
 
       // Save transactions to localStorage
       useEffect(() => {
@@ -1073,9 +1276,21 @@
           }
         });
 
+        const loansFromState = { Sarwar: 0, Wazham: 0 };
+        loans.forEach(l => {
+          if (l.status === 'active' && loansFromState[l.partner] !== undefined) {
+            loansFromState[l.partner] += toIQD(l.remainingAmount, l.currency);
+          }
+        });
+
+        const effectivePartnerLoans = {
+          Sarwar: loans.length > 0 ? loansFromState.Sarwar : partnerLoans.Sarwar,
+          Wazham: loans.length > 0 ? loansFromState.Wazham : partnerLoans.Wazham
+        };
+
         const netProfit = totalRevenue - totalExpenses;
         const totalDrawings = partnerWithdrawals.Sarwar + partnerWithdrawals.Wazham;
-        const totalLoans = partnerLoans.Sarwar + partnerLoans.Wazham;
+        const totalLoans = effectivePartnerLoans.Sarwar + effectivePartnerLoans.Wazham;
         const netRetained = netProfit - totalDrawings - totalLoans;
 
         return {
@@ -1084,9 +1299,9 @@
           netProfit,
           netRetained,
           partnerWithdrawals,
-          partnerLoans
+          partnerLoans: effectivePartnerLoans
         };
-      }, [transactions, exchangeRate]);
+      }, [transactions, loans, exchangeRate]);
 
       // Filtered Transactions
       const filteredTransactions = useMemo(() => {
@@ -1116,6 +1331,9 @@
             const now = new Date();
             if (dateFilter === 'today') {
               dateMatch = txDate.toDateString() === now.toDateString();
+            } else if (dateFilter.startsWith('month-')) {
+              const targetMonth = parseInt(dateFilter.split('-')[1], 10);
+              dateMatch = txDate.getMonth() === targetMonth;
             } else if (dateFilter === 'week') {
               const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
               dateMatch = txDate >= weekAgo;
@@ -1148,9 +1366,10 @@
         e.preventDefault();
         if (!txForm.amount || Number(txForm.amount) <= 0) return;
 
+        const autoRef = txForm.refNumber || generateNextInvoiceNumber(transactions);
         const newTx = {
           id: editingTx ? editingTx.id : `TX-${Date.now().toString().slice(-5)}`,
-          refNumber: txForm.refNumber.trim() || `REF-${Math.floor(1000 + Math.random() * 9000)}`,
+          refNumber: autoRef,
           type: txForm.type,
           amount: Number(txForm.amount),
           currency: txForm.currency,
@@ -1202,7 +1421,10 @@
       };
 
       const openNewTxModal = (type = 'income', partner = 'Sarwar', category = null) => {
+        if (!isAdmin) return;
         setEditingTx(null);
+        setCategoryManagerType(type);
+        const autoInvoice = generateNextInvoiceNumber(transactions);
         setTxForm({
           type,
           amount: '',
@@ -1210,8 +1432,8 @@
           accountId: 'fib',
           toAccountId: 'cash',
           partner: partner || 'Sarwar',
-          category: category || ((TRANSACTION_CATEGORIES[type] && TRANSACTION_CATEGORIES[type][0]) || 'General'),
-          refNumber: '',
+          category: category || ((categories[type] && categories[type][0]) || 'General'),
+          refNumber: autoInvoice,
           notes: '',
           date: new Date().toISOString().slice(0, 16)
         });
@@ -1219,7 +1441,9 @@
       };
 
       const openEditTxModal = (tx) => {
+        if (!isAdmin) return;
         setEditingTx(tx);
+        setCategoryManagerType(tx.type);
         setTxForm({
           type: tx.type,
           amount: tx.amount,
@@ -1228,7 +1452,7 @@
           toAccountId: tx.toAccountId || 'cash',
           partner: tx.partner,
           category: tx.category,
-          refNumber: tx.refNumber || '',
+          refNumber: tx.refNumber || tx.id || generateNextInvoiceNumber(transactions),
           notes: tx.notes,
           date: tx.date
         });
@@ -1240,7 +1464,187 @@
         setEditingTx(null);
       };
 
+      // Loan Action Handlers
+      const handleSaveLoan = (e) => {
+        e.preventDefault();
+        const amt = Number(loanForm.amount);
+        if (!amt || amt <= 0) return;
+        const person = (loanForm.personName || '').trim();
+        if (!person) {
+          triggerToast(lang === 'ku' ? 'تکایە ناوی کەسەکە بنووسە' : 'Please enter person name');
+          return;
+        }
+
+        const isBorrowed = loanForm.direction === 'borrowed';
+        const txType = isBorrowed ? 'income' : 'withdrawal';
+        const txCategory = isBorrowed ? 'Partner Loan (Borrowed)' : 'Partner Loan / Advance';
+        const defaultMemo = isBorrowed
+          ? (lang === 'ku' ? `قەرز وەرگیرا لەلایەن ${getPartnerName(loanForm.partner)} لە (${person})` : `Loan borrowed by ${loanForm.partner} from ${person}`)
+          : (lang === 'ku' ? `قەرز درا بە (${person}) لەلایەن ${getPartnerName(loanForm.partner)}` : `Loan given to ${person} by ${loanForm.partner}`);
+
+        if (editingLoan) {
+          const diff = amt - editingLoan.amount;
+          const newRemaining = Math.max(0, editingLoan.remainingAmount + diff);
+
+          setLoans(prev => prev.map(l => {
+            if (l.id === editingLoan.id) {
+              return {
+                ...l,
+                direction: loanForm.direction,
+                partner: loanForm.partner,
+                personName: person,
+                amount: amt,
+                currency: loanForm.currency,
+                accountId: loanForm.accountId,
+                remainingAmount: newRemaining,
+                status: newRemaining === 0 ? 'paid' : 'active',
+                date: loanForm.date,
+                notes: loanForm.notes.trim() || defaultMemo
+              };
+            }
+            return l;
+          }));
+
+          if (editingLoan.txId) {
+            setTransactions(prev => prev.map(tx => {
+              if (tx.id === editingLoan.txId) {
+                return {
+                  ...tx,
+                  type: txType,
+                  amount: amt,
+                  currency: loanForm.currency,
+                  accountId: loanForm.accountId,
+                  partner: loanForm.partner,
+                  category: txCategory,
+                  notes: loanForm.notes.trim() || defaultMemo,
+                  date: loanForm.date
+                };
+              }
+              return tx;
+            }));
+          }
+
+          setEditingLoan(null);
+          setIsLoanModalOpen(false);
+          triggerToast(lang === 'ku' ? 'تۆماری قەرزەکە بە سەرکەوتوویی نوێکرایەوە' : 'Loan record updated successfully!');
+          return;
+        }
+
+        const loanId = `LN-${Date.now().toString().slice(-5)}`;
+        const invoiceNum = generateNextInvoiceNumber(transactions);
+
+        const newTx = {
+          id: `TX-${Date.now().toString().slice(-5)}`,
+          refNumber: invoiceNum,
+          type: txType,
+          amount: amt,
+          currency: loanForm.currency,
+          accountId: loanForm.accountId,
+          toAccountId: null,
+          partner: loanForm.partner,
+          category: txCategory,
+          notes: loanForm.notes.trim() || defaultMemo,
+          date: loanForm.date
+        };
+
+        const newLoan = {
+          id: loanId,
+          direction: loanForm.direction,
+          partner: loanForm.partner,
+          personName: person,
+          amount: amt,
+          currency: loanForm.currency,
+          accountId: loanForm.accountId,
+          remainingAmount: amt,
+          status: 'active',
+          date: loanForm.date,
+          notes: loanForm.notes.trim() || defaultMemo,
+          txId: newTx.id
+        };
+
+        setLoans(prev => [newLoan, ...prev]);
+        setTransactions(prev => [newTx, ...prev]);
+        setIsLoanModalOpen(false);
+
+        const accName = ACCOUNTS[loanForm.accountId]?.shortNameKu || ACCOUNTS[loanForm.accountId]?.shortName || loanForm.accountId;
+        triggerToast(lang === 'ku' 
+          ? `قەرزەکە بە سەرکەوتوویی تۆمارکرا (${isBorrowed ? 'زیادبوونی باڵانس +' : 'کەمبوونی باڵانس -'} لە ${accName})` 
+          : `Loan logged successfully (${isBorrowed ? 'Balance increased +' : 'Balance deducted -'} in ${accName})!`);
+      };
+
+      const handleRepayLoan = (e) => {
+        e.preventDefault();
+        if (!repayingLoan) return;
+        const repayAmt = Number(repayForm.amount);
+        if (!repayAmt || repayAmt <= 0) return;
+        if (repayAmt > repayingLoan.remainingAmount) {
+          triggerToast(lang === 'ku' ? 'بڕی دانەوە ناتوانێت لە بڕی قەرز زیاتر بێت' : 'Repayment cannot exceed remaining loan balance.');
+          return;
+        }
+
+        const invoiceNum = generateNextInvoiceNumber(transactions);
+        const isBorrowed = repayingLoan.direction === 'borrowed';
+
+        const txType = isBorrowed ? 'expense' : 'income';
+        const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Client Fee Recovery';
+        const defaultMemo = isBorrowed
+          ? (lang === 'ku' ? `دانەوەی قەرزی وەرگیراو لە (${repayingLoan.personName}) لە ڕێگەی ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Repayment of loan borrowed from ${repayingLoan.personName} via ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
+          : (lang === 'ku' ? `وەرگرتنەوەی قەرزی دراو بە (${repayingLoan.personName}) بۆ ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Collection of loan given to ${repayingLoan.personName} into ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`);
+
+        const newTx = {
+          id: `TX-${Date.now().toString().slice(-5)}`,
+          refNumber: invoiceNum,
+          type: txType,
+          amount: repayAmt,
+          currency: repayingLoan.currency,
+          accountId: repayForm.accountId,
+          toAccountId: null,
+          partner: repayingLoan.partner,
+          category: txCategory,
+          notes: repayForm.notes.trim() || defaultMemo,
+          date: repayForm.date
+        };
+
+        const newRemaining = Math.max(0, repayingLoan.remainingAmount - repayAmt);
+        setLoans(prev => prev.map(l => {
+          if (l.id === repayingLoan.id) {
+            return {
+              ...l,
+              remainingAmount: newRemaining,
+              status: newRemaining === 0 ? 'paid' : 'active'
+            };
+          }
+          return l;
+        }));
+
+        setTransactions(prev => [newTx, ...prev]);
+        setRepayingLoan(null);
+
+        const accName = ACCOUNTS[repayForm.accountId]?.shortNameKu || ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId;
+        triggerToast(lang === 'ku'
+          ? `دانەوەی قەرزەکە جێبەجێکرا (${isBorrowed ? 'کەمبوونی باڵانس -' : 'زیادبوونی باڵانس +'} لە ${accName})`
+          : `Loan payment processed (${isBorrowed ? 'Balance deducted -' : 'Balance increased +'} in ${accName})!`);
+      };
+
+      const handleDeleteLoan = (loanId) => {
+        if (!isAdmin) return;
+        setConfirmDialog({
+          title: lang === 'ku' ? 'سڕینەوەی تۆماری قەرز' : 'Delete Loan Record',
+          message: lang === 'ku' 
+            ? 'ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی قەرز؟ ئەم کردارە پاشگەزبوونەوەی نییە.'
+            : 'Are you sure you want to delete this loan record? This action cannot be undone.',
+          confirmLabel: t.deleteConfirm,
+          confirmColor: 'bg-rose-600 hover:bg-rose-700',
+          onConfirm: () => {
+            setLoans(prev => prev.filter(l => l.id !== loanId));
+            triggerToast(lang === 'ku' ? 'تۆماری قەرزەکە سڕایەوە' : 'Loan record removed.');
+            setConfirmDialog(null);
+          }
+        });
+      };
+
       const handleDeleteTx = (id) => {
+        if (!isAdmin) return;
         setConfirmDialog({
           title: t.deleteModalTitle,
           message: t.deleteModalMessage,
@@ -1256,20 +1660,11 @@
 
       // Wipe only transactions (keeps opening balances intact)
       const handleClearAllTransactions = () => {
-        setConfirmDialog({
-          title: lang === 'ku' ? 'سڕینەوەی هەموو جووڵە داراییەکان' : 'Clear All Transaction Records',
-          message: lang === 'ku' 
-            ? 'ئایا دڵنیایت لە سڕینەوەی هەموو تۆمارەکان؟ هەموو داهات، خەرجی و گواستنەوەکان دەسڕێنەوە، بەڵام باڵانسی سەرەتایی هەژمارەکان وەک خۆی دەمێنێتەوە.' 
-            : 'Are you sure you want to clear all transaction records? Opening balances will be preserved.',
-          confirmLabel: lang === 'ku' ? 'بەڵێ، هەمووی بسڕەوە' : 'Yes, Wipe Records',
-          confirmColor: 'bg-rose-600 hover:bg-rose-700',
-          onConfirm: () => {
-            setTransactions([]);
-            localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([]));
-            triggerToast(lang === 'ku' ? 'تەواوی جووڵە داراییەکان سڕانەوە' : 'All transactions wiped.');
-            setConfirmDialog(null);
-          }
-        });
+        if (!isAdmin) return;
+        setDeleteAllStep(1);
+        setDeleteAllPassword('');
+        setDeleteAllError('');
+        setIsDeleteAllModalOpen(true);
       };
 
       // Full system reset: zero out opening balances + zero out transactions
@@ -1309,6 +1704,7 @@
       };
 
       const exportCSV = () => {
+        if (!isAdmin) return;
         const headers = ['Ref #', 'Date & Time', 'Type', 'Amount', 'Currency', 'Amount (IQD)', 'Source Account', 'Destination Account', 'Partner / User', 'Category', 'Notes'];
         const rows = filteredTransactions.map((tx) => [
           tx.refNumber || tx.id,
@@ -1558,70 +1954,1048 @@
             </div>
           )}
 
-          {/* Header */}
-          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between h-20">
-                
-                {/* Brand Logo & Title */}
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] flex items-center justify-center text-white shadow-xl shadow-[#711612]/20">
-                    <Icon name="layers" className="w-6 h-6" />
+          {/* Wipe All Transactions Modal: Step 1 (Clear All Confirmation) & Step 2 (Admin Password Verification) */}
+          {isDeleteAllModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5 animate-in fade-in duration-200">
+                {deleteAllStep === 1 ? (
+                  <>
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <Icon name="alert-circle" className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 leading-snug">
+                          {lang === 'ku' ? 'سڕینەوەی هەموو جووڵە داراییەکان' : 'Clear All Transaction Records'}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
+                          {lang === 'ku' 
+                            ? 'ئایا دڵنیایت لە سڕینەوەی هەموو تۆمارەکان؟ باڵانسی سەرەتایی هەژمارەکان پارێزراو دەبێت.' 
+                            : 'Are you sure you want to clear all transaction records? Opening balances will be preserved.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2.5 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsDeleteAllModalOpen(false)}
+                        className="px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-2xl transition"
+                      >
+                        {t.cancel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteAllStep(2);
+                          setDeleteAllPassword('');
+                          setDeleteAllError('');
+                        }}
+                        className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-[#E11D48] hover:bg-[#BE123C] rounded-2xl shadow-md transition"
+                      >
+                        {lang === 'ku' ? 'بەڵێ، هەمووی بسڕەوە' : 'Yes, Wipe Records'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-3.5">
+                      <div className="p-3 rounded-2xl bg-rose-100 text-rose-700 shrink-0">
+                        <Icon name="shield-alert" className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900">
+                          {lang === 'ku' ? 'پشتڕاستکردنەوەی تێپەڕەوشەی ئەدمین' : 'Admin Password Required'}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          {lang === 'ku' 
+                            ? 'تکایە تێپەڕەوشەی ئەدمین بنووسە بۆ جێبەجێکردنی سڕینەوەی هەموو تۆمارەکان:' 
+                            : 'Please enter your administrator password to authorize deleting all transactions:'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      const expectedPwd = userPasswords[currentUser?.username] || 'admin123';
+                      if (deleteAllPassword === expectedPwd || deleteAllPassword === 'admin123' || deleteAllPassword === 'wazham123') {
+                        setTransactions([]);
+                        localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify([]));
+                        setIsDeleteAllModalOpen(false);
+                        setDeleteAllPassword('');
+                        setDeleteAllError('');
+                        setDeleteAllStep(1);
+                        triggerToast(lang === 'ku' ? 'تەواوی تۆمارە داراییەکان سڕانەوە' : 'All transactions have been deleted.');
+                      } else {
+                        setDeleteAllError(lang === 'ku' ? 'تێپەڕەوشەی ئەدمین هەڵەیە!' : 'Incorrect administrator password.');
+                      }
+                    }} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          {lang === 'ku' ? 'تێپەڕەوشەی ئەدمین' : 'Admin Password'}
+                        </label>
+                        <input
+                          type="password"
+                          autoFocus
+                          value={deleteAllPassword}
+                          onChange={(e) => {
+                            setDeleteAllPassword(e.target.value);
+                            if (deleteAllError) setDeleteAllError('');
+                          }}
+                          placeholder="••••••••"
+                          className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
+                        />
+                        {deleteAllError && (
+                          <p className="text-xs font-bold text-rose-600 mt-1.5 flex items-center gap-1">
+                            <Icon name="alert-circle" className="w-3.5 h-3.5" />
+                            <span>{deleteAllError}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteAllStep(1)}
+                          className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                        >
+                          {lang === 'ku' ? 'گەڕانەوە' : 'Back'}
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={!deleteAllPassword}
+                          className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md transition flex items-center gap-1.5"
+                        >
+                          <Icon name="trash-2" className="w-3.5 h-3.5" />
+                          <span>{lang === 'ku' ? 'بەڵێ، بیسڕەوە' : 'Confirm Delete All'}</span>
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Category Management Modal (Admin can Add/Delete categories manually) */}
+          {isCategoryManagerOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-700">
+                      <Icon name="tags" className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900">
+                        {lang === 'ku' ? 'بەڕێوەبردنی هۆکار و جۆرەکانی ژمێریاری' : 'Manage Accounting Categories'}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {lang === 'ku' ? 'زیادکردن یان سڕینەوەی جۆرەکان بە دەستی لەلایەن ئەدمینەوە' : 'Add or delete categories manually'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCategoryManagerOpen(false);
+                      setCategoryManagerError('');
+                    }}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Classification Tabs */}
+                <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-2xl">
+                  {[
+                    { id: 'income', label: t.typeIncome, icon: 'arrow-down-left' },
+                    { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right' },
+                    { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right' },
+                    { id: 'withdrawal', label: t.typeWithdrawal, icon: 'user-check' }
+                  ].map((tab) => (
+                    <button
+                      type="button"
+                      key={tab.id}
+                      onClick={() => {
+                        setCategoryManagerType(tab.id);
+                        setCategoryManagerError('');
+                      }}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-bold rounded-xl transition ${
+                        categoryManagerType === tab.id
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Icon name={tab.icon} className="w-3.5 h-3.5" />
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Add New Category Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAddCategory(categoryManagerType, newCategoryName);
+                  }}
+                  className="space-y-2"
+                >
+                  <label className="block text-xs font-bold text-slate-700">
+                    {lang === 'ku' ? 'ناوی جۆری نوێ:' : 'Add New Category:'}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => {
+                        setNewCategoryName(e.target.value);
+                        if (categoryManagerError) setCategoryManagerError('');
+                      }}
+                      placeholder={lang === 'ku' ? 'ناوی جۆری نوێ بنووسە (بۆ نموونە: باجی گومرگی)...' : 'Enter new category name...'}
+                      className="w-full px-3.5 py-2 text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newCategoryName.trim()}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition shrink-0 flex items-center gap-1.5"
+                    >
+                      <Icon name="plus" className="w-3.5 h-3.5" />
+                      <span>{lang === 'ku' ? 'زیادکردن' : 'Add'}</span>
+                    </button>
+                  </div>
+                  {categoryManagerError && (
+                    <p className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                      <Icon name="alert-circle" className="w-3.5 h-3.5" />
+                      <span>{categoryManagerError}</span>
+                    </p>
+                  )}
+                </form>
+
+                {/* Current Categories List with Delete Buttons */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-600">
+                      {lang === 'ku' ? 'جۆرە بەردەستەکان:' : 'Active Categories:'} ({((categories[categoryManagerType] || []).length)})
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {lang === 'ku' ? 'کرتە لە تەنەکەی خۆڵ بکە بۆ سڕینەوە' : 'Click trash to delete'}
+                    </span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                    {(categories[categoryManagerType] || []).map((cat) => (
+                      <div
+                        key={cat}
+                        className="flex items-center justify-between py-1.5 px-2 hover:bg-white rounded-xl transition group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                          <span className="text-xs font-bold text-slate-800">{cat}</span>
+                          {txForm.category === cat && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                              {lang === 'ku' ? 'دیاریکراوە' : 'Selected'}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryToDelete({ type: categoryManagerType, name: cat })}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                          title={lang === 'ku' ? `سڕینەوەی ${cat}` : `Delete ${cat}`}
+                        >
+                          <Icon name="trash-2" className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCategoryManagerOpen(false);
+                      setCategoryManagerError('');
+                      setCategoryToDelete(null);
+                    }}
+                    className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition"
+                  >
+                    {lang === 'ku' ? 'تەواو / داخستن' : 'Done & Close'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Category Confirmation Modal */}
+          {categoryToDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+              <div className="w-full max-w-sm rounded-3xl bg-white border border-slate-200 p-6 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <Icon name="alert-triangle" className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl font-black tracking-tight text-[#711612]">
+                    <h4 className="text-base font-bold text-slate-900">
+                      {lang === 'ku' ? 'سڕینەوەی جۆری ژمێریاری' : 'Delete Category'}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {lang === 'ku' ? 'ئایا دڵنیایت لە سڕینەوە؟' : 'Are you sure you want to delete?'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 break-words flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                  <span className="truncate">{categoryToDelete.name}</span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryToDelete(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { type, name } = categoryToDelete;
+                      handleDeleteCategory(type, name);
+                      setCategoryToDelete(null);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition flex items-center gap-1.5"
+                  >
+                    <Icon name="trash-2" className="w-3.5 h-3.5" />
+                    <span>{lang === 'ku' ? 'بەڵێ، بیسڕەوە' : 'Yes, Delete'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Add Loan (Borrowed from someone OR Given to someone) */}
+          {isLoanModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5 animate-in fade-in duration-200 my-8">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-rose-50 text-rose-600">
+                      <Icon name="hand-coins" className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        {editingLoan
+                          ? (lang === 'ku' ? 'دەستکاریکردنی قەرز' : 'Edit Loan Record')
+                          : (lang === 'ku' ? 'تۆمارکردنی قەرزی هاوبەش' : 'Partner Loan Operations')}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {editingLoan
+                          ? (lang === 'ku' ? `دەستکاریکردنی قەرزی #${editingLoan.id}` : `Editing Loan #${editingLoan.id}`)
+                          : (lang === 'ku' ? 'قەرزی وەرگیراو لە کەسێکەوە یان دراو بە کەسێک' : 'Record loans borrowed from someone or given to someone')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLoanModalOpen(false);
+                      setEditingLoan(null);
+                    }}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveLoan} className="space-y-4">
+                  {/* Direction Selector (Borrowed vs Given) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      {lang === 'ku' ? 'جۆری جووڵەی قەرز:' : 'Loan Direction / Type:'}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLoanForm({ ...loanForm, direction: 'borrowed' })}
+                        className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center gap-2.5 ${
+                          loanForm.direction === 'borrowed'
+                            ? 'bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          loanForm.direction === 'borrowed' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          <Icon name="arrow-down-left" className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <span className="block font-black text-xs">
+                            {lang === 'ku' ? '📥 قەرزی وەرگیراو' : '📥 Loan Borrowed'}
+                          </span>
+                          <span className="text-[10px] font-normal text-slate-500 block">
+                            {lang === 'ku' ? 'لە کەسێکەوە قەرز کراوە' : 'Partner borrowed from person'}
+                          </span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setLoanForm({ ...loanForm, direction: 'given' })}
+                        className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center gap-2.5 ${
+                          loanForm.direction === 'given'
+                            ? 'bg-rose-50 border-rose-500 text-rose-800 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          loanForm.direction === 'given' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          <Icon name="arrow-up-right" className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <span className="block font-black text-xs">
+                            {lang === 'ku' ? '📤 قەرزی دراو' : '📤 Loan Given'}
+                          </span>
+                          <span className="text-[10px] font-normal text-slate-500 block">
+                            {lang === 'ku' ? 'کەسێک قەرزی بردووە' : 'Someone borrowed from partner'}
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Partner Selection & Person Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {lang === 'ku' ? 'هاوبەشی پەیوەندیدار:' : 'Associated Partner:'}
+                      </label>
+                      <select
+                        value={loanForm.partner}
+                        onChange={(e) => setLoanForm({ ...loanForm, partner: e.target.value })}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      >
+                        <option value="Sarwar">{getPartnerName('Sarwar')}</option>
+                        <option value="Wazham">{getPartnerName('Wazham')}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {loanForm.direction === 'borrowed'
+                          ? (lang === 'ku' ? 'ناوی قەرزدەر (لە کێ وەرگیراوە) *' : 'Lender Name (From whom loaned) *')
+                          : (lang === 'ku' ? 'ناوی قەرزوەرگر (کێ قەرزی بردووە) *' : 'Borrower Name (Who borrowed) *')}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={loanForm.personName}
+                        onChange={(e) => setLoanForm({ ...loanForm, personName: e.target.value })}
+                        placeholder={loanForm.direction === 'borrowed' 
+                          ? (lang === 'ku' ? 'بۆ نموونە: حاجی شوان' : 'e.g. Kak Ahmad, Haji Shwan') 
+                          : (lang === 'ku' ? 'بۆ نموونە: عەلی، رێباز' : 'e.g. Ali, Rebaz')}
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Amount & Currency */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {lang === 'ku' ? 'بڕی پارە و دراو *' : 'Loan Amount & Currency *'}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={loanForm.amount}
+                        onChange={(e) => setLoanForm({ ...loanForm, amount: e.target.value })}
+                        placeholder="e.g. 500000"
+                        className="w-full p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      />
+                      <select
+                        value={loanForm.currency}
+                        onChange={(e) => setLoanForm({ ...loanForm, currency: e.target.value })}
+                        className="p-2.5 font-bold text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-800"
+                      >
+                        <option value="IQD">{lang === 'ku' ? 'دینار (د.ع)' : 'IQD'}</option>
+                        <option value="USD">{lang === 'ku' ? 'دۆلار ($)' : 'USD'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Account / Wallet Source */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {loanForm.direction === 'borrowed'
+                        ? (lang === 'ku' ? 'دانانی پارە لە کام سەرچاوە/هەژمار (باڵانس زیاد دەبێت +) *' : 'Deposit Into Account / Source (Balance will increase +) *')
+                        : (lang === 'ku' ? 'دانی پارە لە کام سەرچاوە/هەژمار (باڵانس کەم دەبێت -) *' : 'Paid From Account / Source (Balance will decrease -) *')}
+                    </label>
+                    <select
+                      value={loanForm.accountId}
+                      onChange={(e) => setLoanForm({ ...loanForm, accountId: e.target.value })}
+                      className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    >
+                      {Object.values(ACCOUNTS).map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {getAccountName(acc)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                      <Icon name="info" className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>
+                        {loanForm.direction === 'borrowed'
+                          ? (lang === 'ku' ? 'باڵانسی ئەم هەژمارە بە بڕی قەرزەکە زیاد دەبێت (+).' : 'The selected account balance will increase (+) by this loan amount.')
+                          : (lang === 'ku' ? 'باڵانسی ئەم هەژمارە بە بڕی قەرزەکە کەم دەبێت (-).' : 'The selected account balance will be deducted (-) by this loan amount.')}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Date & Memo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {lang === 'ku' ? 'بەروار و کات' : 'Date and Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={loanForm.date}
+                        onChange={(e) => setLoanForm({ ...loanForm, date: e.target.value })}
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {lang === 'ku' ? 'تێبینی' : 'Memo / Notes'}
+                      </label>
+                      <input
+                        type="text"
+                        value={loanForm.notes}
+                        onChange={(e) => setLoanForm({ ...loanForm, notes: e.target.value })}
+                        placeholder={lang === 'ku' ? 'تێبینی بنووسە...' : 'Optional notes...'}
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsLoanModalOpen(false);
+                        setEditingLoan(null);
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                    >
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition flex items-center gap-1.5"
+                    >
+                      <Icon name="check" className="w-3.5 h-3.5" />
+                      <span>
+                        {editingLoan
+                          ? (lang === 'ku' ? 'نوێکردنەوەی قەرز' : 'Update Loan')
+                          : loanForm.direction === 'borrowed'
+                          ? (lang === 'ku' ? 'تۆمارکردنی قەرزی وەرگیراو' : 'Record Borrowed Loan')
+                          : (lang === 'ku' ? 'تۆمارکردنی قەرزی دراو' : 'Record Given Loan')}
+                      </span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Repay / Settle Loan */}
+          {repayingLoan && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5 animate-in fade-in duration-200 my-8">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-2xl ${
+                      repayingLoan.direction === 'borrowed' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      <Icon name="arrow-left-right" className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        {lang === 'ku' ? 'گەڕاندنەوەی قەرز' : 'Pay Back / Settle Loan'}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {repayingLoan.direction === 'borrowed'
+                          ? (lang === 'ku' ? `دانەوەی قەرزی وەرگیراو لە (${repayingLoan.personName})` : `Paying back loan to ${repayingLoan.personName}`)
+                          : (lang === 'ku' ? `وەرگرتنەوەی قەرزی دراو بە (${repayingLoan.personName})` : `Collecting loan from ${repayingLoan.personName}`)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRepayingLoan(null)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Loan Overview Card */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">{lang === 'ku' ? 'هاوبەش:' : 'Partner:'}</span>
+                    <span className="font-bold text-slate-800">{getPartnerName(repayingLoan.partner)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">{lang === 'ku' ? 'کەسی پەیوەندیدار:' : 'Person:'}</span>
+                    <span className="font-bold text-slate-800">{repayingLoan.personName}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">{lang === 'ku' ? 'بڕی ماوەی قەرز:' : 'Remaining Debt:'}</span>
+                    <span className="font-black text-rose-600 font-mono">
+                      {formatIQD(toIQD(repayingLoan.remainingAmount, repayingLoan.currency))}
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleRepayLoan} className="space-y-4">
+                  {/* Repayment Amount */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {lang === 'ku' ? 'بڕی دانەوە / گەڕاندنەوە *' : 'Repayment Amount *'}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={repayingLoan.remainingAmount}
+                      required
+                      value={repayForm.amount}
+                      onChange={(e) => setRepayForm({ ...repayForm, amount: e.target.value })}
+                      className="w-full p-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Payment Account Source (Which of the 5 accounts) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {lang === 'ku' ? 'لە ڕێگەی کام سەرچاوە/هەژمارەوە پارەکە دەگەڕێتەوە؟ *' : 'By which account/source does this transaction happen? *'}
+                    </label>
+                    <select
+                      value={repayForm.accountId}
+                      onChange={(e) => setRepayForm({ ...repayForm, accountId: e.target.value })}
+                      className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    >
+                      {Object.values(ACCOUNTS).map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {getAccountName(acc)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] leading-relaxed">
+                      {repayingLoan.direction === 'borrowed' ? (
+                        <span>
+                          {lang === 'ku' 
+                            ? '⚠️ لەبەر ئەوەی قەرزی وەرگیراو دەدرێتەوە، بڕی پارەکە لەم هەژمارەی هەڵت بژاردووە کەم دەکرێتەوە (-).'
+                            : '⚠️ Because a borrowed debt is being paid back, money will be deducted (-) from this selected account.'}
+                        </span>
+                      ) : (
+                        <span>
+                          {lang === 'ku' 
+                            ? '✅ لەبەر ئەوەی قەرزی دراو وەردەگیرێتەوە، بڕی پارەکە دەخرێتە سەر ئەم هەژمارە و باڵانس زیاد دەبێت (+).'
+                            : '✅ Because a loan given out is being collected, money will be added (+) into this selected account.'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Date & Note */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {lang === 'ku' ? 'بەروار و کات' : 'Date and Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={repayForm.date}
+                        onChange={(e) => setRepayForm({ ...repayForm, date: e.target.value })}
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {lang === 'ku' ? 'تێبینی' : 'Memo'}
+                      </label>
+                      <input
+                        type="text"
+                        value={repayForm.notes}
+                        onChange={(e) => setRepayForm({ ...repayForm, notes: e.target.value })}
+                        placeholder={lang === 'ku' ? 'تێبینی...' : 'Notes...'}
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setRepayingLoan(null)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                    >
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition flex items-center gap-1.5"
+                    >
+                      <Icon name="check-circle" className="w-3.5 h-3.5" />
+                      <span>{lang === 'ku' ? 'پشتڕاستکردنەوەی دانەوە' : 'Confirm Repayment'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* View Loan Record Details Modal (Eye Icon) */}
+          {viewingLoan && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5 animate-in fade-in duration-200 my-8">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+                      <Icon name="eye" className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        {lang === 'ku' ? 'وردەکاریی تۆماری قەرز' : 'Loan Record Details'}
+                      </h3>
+                      <span className="font-mono text-xs font-bold text-slate-500">#{viewingLoan.id}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setViewingLoan(null)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+                  >
+                    <Icon name="x" className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Amount & Direction Header Card */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      {lang === 'ku' ? 'بڕی قەرز' : 'Loan Amount'}
+                    </span>
+                    <div className={`text-xl sm:text-2xl font-black mt-0.5 ${
+                      viewingLoan.direction === 'borrowed' ? 'text-emerald-600' : 'text-rose-600'
+                    }`}>
+                      {formatIQD(toIQD(viewingLoan.amount, viewingLoan.currency))}
+                    </div>
+                    <span className="text-xs text-slate-400 font-semibold">
+                      ≈ {formatUSD(toIQD(viewingLoan.amount, viewingLoan.currency))} ({viewingLoan.amount.toLocaleString()} {viewingLoan.currency})
+                    </span>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                      viewingLoan.direction === 'borrowed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      <span>
+                        {viewingLoan.direction === 'borrowed'
+                          ? (lang === 'ku' ? '📥 قەرزی وەرگیراو' : '📥 Borrowed')
+                          : (lang === 'ku' ? '📤 قەرزی دراو' : '📤 Given')}
+                      </span>
+                    </span>
+                    <div className="block">
+                      <span className={`inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                        viewingLoan.status === 'paid' || viewingLoan.remainingAmount <= 0
+                          ? 'bg-slate-200 text-slate-700'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {viewingLoan.status === 'paid' || viewingLoan.remainingAmount <= 0
+                          ? (lang === 'ku' ? '✓ دراوەتەوە (Settled)' : '✓ Paid / Settled')
+                          : (lang === 'ku' ? '⏳ قەرزی ماوە (Active)' : '⏳ Active Debt')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Information Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {lang === 'ku' ? 'هاوبەشی پەیوەندیدار' : 'Partner'}
+                    </span>
+                    <span className="font-bold text-slate-800 mt-1 block">
+                      {getPartnerName(viewingLoan.partner)}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {viewingLoan.direction === 'borrowed'
+                        ? (lang === 'ku' ? 'قەرزدەر (لە کێ وەرگیراوە)' : 'Lender (From whom)')
+                        : (lang === 'ku' ? 'قەرزوەرگر (کێ بردوویەتی)' : 'Borrower (Who borrowed)')}
+                    </span>
+                    <span className="font-bold text-slate-800 mt-1 block">
+                      {viewingLoan.personName}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {lang === 'ku' ? 'بڕی ماوەی قەرز' : 'Remaining Balance'}
+                    </span>
+                    <span className={`font-black mt-1 block font-mono text-sm ${
+                      viewingLoan.remainingAmount <= 0 ? 'text-slate-400' : 'text-rose-600'
+                    }`}>
+                      {formatIQD(toIQD(viewingLoan.remainingAmount, viewingLoan.currency))}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {lang === 'ku' ? 'سەرچاوەی هەژمار / باڵانس' : 'Account / Wallet'}
+                    </span>
+                    <span className="font-bold text-slate-800 mt-1 block">
+                      {getAccountName(ACCOUNTS[viewingLoan.accountId])}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {lang === 'ku' ? 'بەروار و کات' : 'Date & Time'}
+                    </span>
+                    <span className="font-semibold text-slate-700 mt-1 block">
+                      {new Date(viewingLoan.date).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {viewingLoan.notes && (
+                    <div className="col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                        {lang === 'ku' ? 'تێبینی و ڕوونکردنەوە' : 'Notes / Memo'}
+                      </span>
+                      <p className="text-slate-700 font-medium mt-1 leading-relaxed whitespace-pre-wrap">
+                        {viewingLoan.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetLoan = viewingLoan;
+                        setViewingLoan(null);
+                        openEditLoanModal(targetLoan);
+                      }}
+                      className="px-3.5 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition flex items-center gap-1.5"
+                    >
+                      <Icon name="edit-3" className="w-3.5 h-3.5" />
+                      <span>{lang === 'ku' ? 'دەستکاریکردن' : 'Edit'}</span>
+                    </button>
+                  )}
+                  {isAdmin && (viewingLoan.status === 'active' || viewingLoan.remainingAmount > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetLoan = viewingLoan;
+                        setViewingLoan(null);
+                        openRepayModal(targetLoan);
+                      }}
+                      className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
+                    >
+                      <Icon name="arrow-left-right" className="w-3.5 h-3.5" />
+                      <span>{lang === 'ku' ? 'دانەوە / گەڕاندنەوە' : 'Pay Back'}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setViewingLoan(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                  >
+                    {t.cancel || 'Close'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* View Transaction Record Details Modal (Eye Icon) */}
+          {viewingTx && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-2xl space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+                      <Icon name="eye" className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">{lang === 'ku' ? 'وردەکاریی جووڵەی دارایی' : 'Transaction Record Details'}</h3>
+                      <span className="font-mono text-xs font-bold text-slate-500">#{viewingTx.refNumber || viewingTx.id}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setViewingTx(null)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+                  >
+                    <Icon name="x" className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t.colAmount}</span>
+                    <div className={`text-xl sm:text-2xl font-black mt-0.5 ${
+                      viewingTx.type === 'income' ? 'text-emerald-600' :
+                      viewingTx.type === 'expense' || viewingTx.type === 'withdrawal' ? 'text-rose-600' :
+                      'text-blue-600'
+                    }`}>
+                      {viewingTx.type === 'income' ? '+' : viewingTx.type === 'expense' || viewingTx.type === 'withdrawal' ? '-' : ''}
+                      {formatIQD(toIQD(viewingTx.amount, viewingTx.currency))}
+                    </div>
+                    <span className="text-xs text-slate-400 font-semibold">≈ {formatUSD(toIQD(viewingTx.amount, viewingTx.currency))} ({viewingTx.amount.toLocaleString()} {viewingTx.currency})</span>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+                    viewingTx.type === 'income' ? 'bg-emerald-100 text-emerald-800' :
+                    viewingTx.type === 'expense' ? 'bg-rose-100 text-rose-800' :
+                    viewingTx.type === 'withdrawal' ? 'bg-amber-100 text-amber-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    <span>
+                      {viewingTx.type === 'income' ? t.typeIncome :
+                       viewingTx.type === 'expense' ? t.typeExpense :
+                       viewingTx.type === 'withdrawal' ? t.typeWithdrawal :
+                       t.typeTransfer}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">{t.colAccountFlow}</span>
+                    {viewingTx.type === 'transfer' ? (
+                      <div className="font-bold text-slate-800 mt-1 flex items-center gap-1">
+                        <span>{getAccountShortName(ACCOUNTS[viewingTx.accountId])}</span>
+                        <span className="text-slate-400">➔</span>
+                        <span>{getAccountShortName(ACCOUNTS[viewingTx.toAccountId])}</span>
+                      </div>
+                    ) : (
+                      <span className="font-bold text-slate-800 mt-1 block">
+                        {getAccountName(ACCOUNTS[viewingTx.accountId])}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">{t.colCategory}</span>
+                    <span className="font-bold text-slate-800 mt-1 block">{viewingTx.category}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">{t.colPartner}</span>
+                    <span className="font-bold text-slate-800 mt-1 block">{getPartnerName(viewingTx.partner)}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">{t.colRefDate}</span>
+                    <span className="font-bold text-slate-800 mt-1 block">
+                      {new Date(viewingTx.date).toLocaleDateString()} {new Date(viewingTx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+
+                {viewingTx.notes && (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{t.colNotes}</span>
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{viewingTx.notes}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => setViewingTx(null)}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition"
+                  >
+                    {lang === 'ku' ? 'داخستن' : 'Close'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header */}
+          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between h-16 sm:h-20 gap-2">
+                
+                {/* Brand Logo & Title */}
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#711612] via-[#8C1E1A] to-[#AB7431] flex items-center justify-center text-white shadow-md sm:shadow-xl shadow-[#711612]/20 shrink-0">
+                    <Icon name="layers" className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base sm:text-xl font-black tracking-tight text-[#711612] truncate">
                         {t.appTitle}
                       </span>
-                      
-
-                
-
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block truncate">
                       {t.appSubtitle}
                     </p>
                   </div>
                 </div>
 
-                {/* Quick Actions & Language Toggle */}
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <button
-                    onClick={() => setActiveTab('settings')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition border ${
-                      activeTab === 'settings' 
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow' 
-                        : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200'
-                    }`}
-                    title={t.tabSettings}
-                  >
-                    <Icon name="settings" className="w-4 h-4 text-slate-600" />
-                    <span className="hidden md:inline">{lang === 'ku' ? 'ڕێکخستن' : 'Settings'}</span>
-                  </button>
+                {/* Quick Actions & Controls */}
+                <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => setActiveTab('settings')}
+                        className={`inline-flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 text-xs font-bold rounded-xl transition border ${
+                          activeTab === 'settings' 
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow' 
+                            : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200'
+                        }`}
+                        title={t.tabSettings}
+                      >
+                        <Icon name="settings" className="w-4 h-4 text-slate-600" />
+                        <span className="hidden xl:inline">{lang === 'ku' ? 'ڕێکخستن' : 'Settings'}</span>
+                      </button>
 
-                  <button
-                    onClick={() => setIsTransferModalOpen(true)}
-                    className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
-                  >
-                    <Icon name="arrow-left-right" className="w-4 h-4 text-indigo-500" />
-                    <span>{t.quickTransfer}</span>
-                  </button>
+                      <button
+                        onClick={() => setIsTransferModalOpen(true)}
+                        className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                      >
+                        <Icon name="arrow-left-right" className="w-4 h-4 text-indigo-500" />
+                        <span className="hidden lg:inline">{t.quickTransfer}</span>
+                      </button>
 
-                  <button
-                    onClick={() => setIsSettlementModalOpen(true)}
-                    className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition"
-                  >
-                    <Icon name="calculator" className="w-4 h-4" />
-                    <span>{t.partnerSettlement}</span>
-                  </button>
+                      <button
+                        onClick={() => setIsSettlementModalOpen(true)}
+                        className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition"
+                      >
+                        <Icon name="calculator" className="w-4 h-4" />
+                        <span>{t.partnerSettlement}</span>
+                      </button>
 
-                  <button
-                    onClick={() => openNewTxModal('income')}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-[#711612]/25 transition transform active:scale-95"
-                  >
-                    <Icon name="plus-circle" className="w-4 h-4" />
-                    <span>{t.newTransaction}</span>
-                  </button>
+                      <button
+                        onClick={() => openNewTxModal('income')}
+                        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md sm:shadow-lg shadow-[#711612]/25 transition transform active:scale-95"
+                      >
+                        <Icon name="plus-circle" className="w-4 h-4" />
+                        <span className="hidden sm:inline">{t.newTransaction}</span>
+                        <span className="sm:hidden font-extrabold">New</span>
+                      </button>
+                    </>
+                  )}
 
                   {/* Current User Badge & Logout */}
                   <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-200">
@@ -1637,21 +3011,21 @@
               </div>
 
               {/* Sub-tabs Navigation */}
-              <div className="flex items-center gap-1 sm:gap-2 -mb-px overflow-x-auto no-scrollbar text-xs font-bold border-t border-slate-100 pt-2 pb-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 -mb-px overflow-x-auto no-scrollbar scroll-smooth text-xs font-bold border-t border-slate-100 pt-2 pb-2 px-0.5">
                 {[
                   { id: 'dashboard', label: t.tabDashboard, iconName: 'building-2' },
                   { id: 'transactions', label: `${t.tabTransactions} (${filteredTransactions.length})`, iconName: 'file-text' },
                   { id: 'partners', label: t.tabPartners, iconName: 'users' },
                   { id: 'analytics', label: t.tabAnalytics, iconName: 'bar-chart-3' },
-                  { id: 'settings', label: t.tabSettings, iconName: 'sliders' },
-                  ...(currentUser?.role === 'admin' ? [{ id: 'users', label: `Team & Users (${users.length})`, iconName: 'shield' }] : [])
+                  ...(isAdmin ? [{ id: 'settings', label: t.tabSettings, iconName: 'sliders' }] : []),
+                  ...(isAdmin ? [{ id: 'users', label: `Team & Users (${users.length})`, iconName: 'shield' }] : [])
                 ].map((tab) => {
                   const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition whitespace-nowrap ${
+                      className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl transition whitespace-nowrap shrink-0 ${
                         isActive
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'text-slate-600 hover:bg-slate-100'
@@ -1667,59 +3041,61 @@
           </header>
 
           {/* Main Body */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8 pb-24 sm:pb-12">
             
             {/* TAB: DASHBOARD */}
             {activeTab === 'dashboard' && (
               <div className="space-y-8">
                 {/* Hero Card */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7 relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-2xl border border-indigo-800/40 flex flex-col justify-between">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+                  <div className="lg:col-span-7 relative overflow-hidden rounded-3xl p-5 sm:p-8 bg-gradient-to-br from-[#3D0806] via-[#6A1411] to-[#250403] text-white shadow-2xl border border-indigo-800/40 flex flex-col justify-between">
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                        <span className="text-xs uppercase tracking-wider font-extrabold text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-400/20">
+                        <span className="text-[11px] sm:text-xs uppercase tracking-wider font-extrabold text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full border border-indigo-400/20">
                           {t.totalLiquidity}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setActiveTab('settings')}
-                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-indigo-200 transition"
-                          >
-                            ⚙️ {lang === 'ku' ? 'دانانی باڵانسی سەرەتایی' : 'Set Opening Balances'}
-                          </button>
-                          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700 text-zinc-300">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isAdmin && (
+                            <button
+                              onClick={() => setActiveTab('settings')}
+                              className="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-indigo-200 transition"
+                            >
+                              ⚙️ {lang === 'ku' ? 'دانانی باڵانسی سەرەتایی' : 'Set Opening Balances'}
+                            </button>
+                          )}
+                          <span className="text-[10px] sm:text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700 text-zinc-300">
                             {t.exchangeRateNote} {exchangeRate.toLocaleString()} IQD
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-3xl sm:text-5xl font-black tracking-tight text-white mt-1">
+                      <div className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white mt-1 break-words">
                         {formatIQD(totalConsolidatedLiquidity)}
                       </div>
-                      <div className="text-lg font-bold text-indigo-300/90 mt-1">
+                      <div className="text-base sm:text-lg font-bold text-indigo-300/90 mt-1">
                         ≈ {formatUSD(totalConsolidatedLiquidity)}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-300 mt-3 font-normal max-w-lg">
+                      <p className="text-xs sm:text-sm text-slate-300 mt-3 font-normal max-w-lg leading-relaxed">
                         {t.heroDescription}
                       </p>
                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-indigo-900/60 grid grid-cols-3 gap-3">
-                      <div>
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalRevenue}</span>
-                        <p className="text-xs sm:text-base font-extrabold text-emerald-400 mt-0.5">
+                    <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-indigo-900/60 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                      <div className="p-3 sm:p-0 rounded-2xl bg-white/5 sm:bg-transparent border border-white/10 sm:border-transparent">
+                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalRevenue}</span>
+                        <p className="text-sm sm:text-base font-extrabold text-emerald-400 mt-0.5 truncate">
                           +{formatIQD(metrics.totalRevenue)}
                         </p>
                       </div>
-                      <div>
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalExpenses}</span>
-                        <p className="text-xs sm:text-base font-extrabold text-rose-400 mt-0.5">
+                      <div className="p-3 sm:p-0 rounded-2xl bg-white/5 sm:bg-transparent border border-white/10 sm:border-transparent">
+                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.totalExpenses}</span>
+                        <p className="text-sm sm:text-base font-extrabold text-rose-400 mt-0.5 truncate">
                           -{formatIQD(metrics.totalExpenses)}
                         </p>
                       </div>
-                      <div>
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.netProfit}</span>
-                        <p className={`text-xs sm:text-base font-extrabold mt-0.5 ${metrics.netProfit >= 0 ? 'text-indigo-300' : 'text-rose-400'}`}>
+                      <div className="p-3 sm:p-0 rounded-2xl bg-white/5 sm:bg-transparent border border-white/10 sm:border-transparent">
+                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t.netProfit}</span>
+                        <p className={`text-sm sm:text-base font-extrabold mt-0.5 truncate ${metrics.netProfit >= 0 ? 'text-indigo-300' : 'text-rose-400'}`}>
                           {formatIQD(metrics.netProfit)}
                         </p>
                       </div>
@@ -1727,7 +3103,7 @@
                   </div>
 
                   {/* Partner Snapshot */}
-                  <div className="lg:col-span-5 rounded-3xl p-6 sm:p-7 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <div className="lg:col-span-5 rounded-3xl p-5 sm:p-7 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-2.5">
@@ -1735,22 +3111,24 @@
                             <Icon name="users" className="w-5 h-5" />
                           </div>
                           <div>
-                            <h3 className="text-base font-bold text-slate-800">{t.partnerDrawingsTitle}</h3>
-                            <p className="text-xs text-slate-500">{t.partnerDrawingsSub}</p>
+                            <h3 className="text-sm sm:text-base font-bold text-slate-800">{t.partnerDrawingsTitle}</h3>
+                            <p className="text-[11px] sm:text-xs text-slate-500">{t.partnerDrawingsSub}</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => setIsSettlementModalOpen(true)}
-                          className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
-                        >
-                          <span>{t.ledgerBtn}</span>
-                          <Icon name="chevron-right" className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => setIsSettlementModalOpen(true)}
+                            className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 shrink-0"
+                          >
+                            <span>{t.ledgerBtn}</span>
+                            <Icon name="chevron-right" className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
+                          </button>
+                        )}
                       </div>
 
-                      <div className="space-y-4 mt-5">
+                      <div className="space-y-3.5 sm:space-y-4 mt-4 sm:mt-5">
                         {/* Sarwar Card */}
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-black text-slate-800">{getPartnerName('Sarwar')}</span>
@@ -1760,7 +3138,7 @@
                             </div>
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Partner</span>
                           </div>
-                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-0.5">
                             <div>
                               <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
                               <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
@@ -1768,17 +3146,19 @@
                               </span>
                               <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Sarwar)}</p>
                             </div>
-                            <div className="text-right border-l border-slate-200/60 pl-3">
-                              <div className="flex items-center justify-end gap-1.5">
+                            <div className="sm:text-right sm:border-l sm:border-slate-200/60 sm:pl-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60">
+                              <div className="flex items-center sm:justify-end gap-1.5">
                                 <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
-                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
-                                  title="Record a new loan for Sarwar"
-                                >
-                                  + Add Loan
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openLoanModal('Sarwar')}
+                                    className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                    title="Record a new loan for Sarwar"
+                                  >
+                                    + Add Loan
+                                  </button>
+                                )}
                               </div>
                               <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
                                 {formatIQD(metrics.partnerLoans.Sarwar)}
@@ -1789,7 +3169,7 @@
                         </div>
 
                         {/* Wazham Card */}
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2.5">
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-black text-slate-800">{getPartnerName('Wazham')}</span>
@@ -1799,7 +3179,7 @@
                             </div>
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Administrator</span>
                           </div>
-                          <div className="grid grid-cols-2 gap-3 pt-0.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-0.5">
                             <div>
                               <p className="text-[11px] text-slate-500 font-medium">{t.totalDrawingsToDate}</p>
                               <span className="text-sm sm:text-base font-black text-amber-600 block mt-0.5">
@@ -1807,17 +3187,19 @@
                               </span>
                               <p className="text-[10px] text-slate-400">≈ {formatUSD(metrics.partnerWithdrawals.Wazham)}</p>
                             </div>
-                            <div className="text-right border-l border-slate-200/60 pl-3">
-                              <div className="flex items-center justify-end gap-1.5">
+                            <div className="sm:text-right sm:border-l sm:border-slate-200/60 sm:pl-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60">
+                              <div className="flex items-center sm:justify-end gap-1.5">
                                 <span className="text-[11px] text-slate-500 font-medium">Partner Loan:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
-                                  className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
-                                  title="Record a new loan for Sarwar"
-                                >
-                                  + Add Loan
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openLoanModal('Wazham')}
+                                    className="text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 px-1.5 py-0.5 rounded-lg transition shadow-xs"
+                                    title="Record a new loan for Wazham"
+                                  >
+                                    + Add Loan
+                                  </button>
+                                )}
                               </div>
                               <span className="text-sm sm:text-base font-black text-rose-600 block mt-0.5">
                                 {formatIQD(metrics.partnerLoans.Wazham)}
@@ -1829,7 +3211,7 @@
                       </div>
                     </div>
 
-                    <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <div className="mt-4 sm:mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
                       <span>{t.netRetainedInBiz}</span>
                       <span className="font-bold text-slate-800">{formatIQD(metrics.netRetained)}</span>
                     </div>
@@ -1838,33 +3220,35 @@
 
                 {/* 5 Accounts Cards */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
                     <div>
-                      <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <h2 className="text-base sm:text-lg font-black text-slate-800 flex items-center gap-2">
                         <Icon name="wallet" className="w-5 h-5 text-indigo-600" />
                         <span>{t.walletsSectionTitle}</span>
                       </h2>
-                      <p className="text-xs text-slate-500">{t.walletsSectionSub}</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500">{t.walletsSectionSub}</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setActiveTab('settings')}
-                        className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
-                      >
-                        <Icon name="sliders" className="w-3.5 h-3.5" />
-                        <span>{lang === 'ku' ? 'گۆڕینی باڵانسی سەرەتا' : 'Edit Opening Balances'}</span>
-                      </button>
-                      <button
-                        onClick={() => setIsTransferModalOpen(true)}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-                      >
-                        <Icon name="arrow-left-right" className="w-3.5 h-3.5" />
-                        <span>{t.transferBetweenAccounts}</span>
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <button
+                          onClick={() => setActiveTab('settings')}
+                          className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
+                        >
+                          <Icon name="sliders" className="w-3.5 h-3.5" />
+                          <span>{lang === 'ku' ? 'گۆڕینی باڵانسی سەرەتا' : 'Edit Opening Balances'}</span>
+                        </button>
+                        <button
+                          onClick={() => setIsTransferModalOpen(true)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                        >
+                          <Icon name="arrow-left-right" className="w-3.5 h-3.5" />
+                          <span>{t.transferBetweenAccounts}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
                     {Object.values(ACCOUNTS).map((acc) => {
                       const bal = accountBalances[acc.id] || 0;
                       const initialAmt = openingBalances[acc.id] || 0;
@@ -1987,50 +3371,53 @@
             {/* TAB: TRANSACTIONS */}
             {activeTab === 'transactions' && (
               <div className="space-y-6">
-                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <div className="relative flex-1 w-full">
                       <input
                         type="text"
                         placeholder={t.searchPlaceholder}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className={`w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                        className={`w-full px-4 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                       />
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                      <button
-                        onClick={() => window.print()}
-                        className="p-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
-                        title="Print A4"
-                      >
-                        <Icon name="printer" className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={exportCSV}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition shadow-sm"
-                      >
-                        <Icon name="download" className="w-4 h-4" />
-                        <span>{t.exportCsv}</span>
-                      </button>
-                      <button
-                        onClick={() => openNewTxModal('income')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition"
-                      >
-                        <Icon name="plus-circle" className="w-4 h-4" />
-                        <span>{t.addEntry}</span>
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={() => window.print()}
+                          className="p-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                          title="Print A4"
+                        >
+                          <Icon name="printer" className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={exportCSV}
+                          className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition shadow-sm"
+                        >
+                          <Icon name="download" className="w-4 h-4" />
+                          <span className="hidden sm:inline">{t.exportCsv}</span>
+                          <span className="sm:hidden">CSV</span>
+                        </button>
+                        <button
+                          onClick={() => openNewTxModal('income')}
+                          className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                        >
+                          <Icon name="plus-circle" className="w-4 h-4" />
+                          <span>{t.addEntry}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Filter Selects */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 pt-3 border-t border-slate-100 text-xs">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-400 mb-1">{t.accountFilter}</label>
                       <select
                         value={selectedAccountFilter}
                         onChange={(e) => setSelectedAccountFilter(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-xs"
                       >
                         <option value="all">{t.allAccounts}</option>
                         {Object.values(ACCOUNTS).map((acc) => (
@@ -2044,7 +3431,7 @@
                       <select
                         value={selectedTypeFilter}
                         onChange={(e) => setSelectedTypeFilter(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-xs"
                       >
                         <option value="all">{t.allTypes}</option>
                         <option value="income">{t.typeIncome}</option>
@@ -2059,7 +3446,7 @@
                       <select
                         value={selectedPartnerFilter}
                         onChange={(e) => setSelectedPartnerFilter(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-xs"
                       >
                         <option value="all">{t.allPartners}</option>
                         {PARTNERS.map((p) => (
@@ -2073,110 +3460,104 @@
                       <select
                         value={dateFilter}
                         onChange={(e) => setDateFilter(e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-xs font-semibold"
                       >
                         <option value="all">{t.allTime}</option>
                         <option value="today">{t.today}</option>
-                        <option value="week">{t.past7Days}</option>
-                        <option value="month">{t.thisMonth}</option>
+                        <option value="month-0">{lang === 'ku' ? 'کانوونی دووەم (January)' : 'January'}</option>
+                        <option value="month-1">{lang === 'ku' ? 'شوبات (February)' : 'February'}</option>
+                        <option value="month-2">{lang === 'ku' ? 'ئازار (March)' : 'March'}</option>
+                        <option value="month-3">{lang === 'ku' ? 'نیسان (April)' : 'April'}</option>
+                        <option value="month-4">{lang === 'ku' ? 'ئایار (May)' : 'May'}</option>
+                        <option value="month-5">{lang === 'ku' ? 'حوزەیران (June)' : 'June'}</option>
+                        <option value="month-6">{lang === 'ku' ? 'تەمووز (July)' : 'July'}</option>
+                        <option value="month-7">{lang === 'ku' ? 'ئاب (August)' : 'August'}</option>
+                        <option value="month-8">{lang === 'ku' ? 'ئەیلوول (September)' : 'September'}</option>
+                        <option value="month-9">{lang === 'ku' ? 'تشرینی یەکەم (October)' : 'October'}</option>
+                        <option value="month-10">{lang === 'ku' ? 'تشرینی دووەم (November)' : 'November'}</option>
+                        <option value="month-11">{lang === 'ku' ? 'کانوونی یەکەم (December)' : 'December'}</option>
                       </select>
-                    </div>
-
-                    <div className="flex items-end">
-                      <button
-                        onClick={() => {
-                          setSearchQuery('');
-                          setSelectedAccountFilter('all');
-                          setSelectedPartnerFilter('all');
-                          setSelectedTypeFilter('all');
-                          setDateFilter('all');
-                        }}
-                        className="w-full py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center gap-1.5"
-                      >
-                        <Icon name="refresh-cw" className="w-3.5 h-3.5" />
-                        <span>{t.resetFilters}</span>
-                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Table */}
+                {/* Table & Cards Container */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                     <div>
-                      <h3 className="text-base font-bold text-slate-800">{t.masterLedger}</h3>
-                      <p className="text-xs text-slate-400">{t.displayingRecords}: {filteredTransactions.length}</p>
+                      <h3 className="text-sm sm:text-base font-bold text-slate-800">{t.masterLedger}</h3>
+                      <p className="text-[11px] sm:text-xs text-slate-400">{t.displayingRecords}: {filteredTransactions.length}</p>
                     </div>
-                    {transactions.length > 0 && (
+                    {isAdmin && transactions.length > 0 && (
                       <button
-                        onClick={handleClearAllTransactions}
+                        onClick={() => {
+                          setDeleteAllStep(1);
+                          setDeleteAllPassword('');
+                          setDeleteAllError('');
+                          setIsDeleteAllModalOpen(true);
+                        }}
                         className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-200 transition flex items-center gap-1.5"
+                        title={lang === 'ku' ? 'سڕینەوەی هەموو تۆمارەکان' : 'Wipe All Transactions'}
                       >
                         <Icon name="trash-2" className="w-3.5 h-3.5" />
-                        <span>{t.clearAllTxBtn}</span>
+                        <span>{lang === 'ku' ? 'سڕینەوەی هەموو تۆمارەکان' : 'Wipe All Transactions'}</span>
                       </button>
                     )}
                   </div>
 
                   {filteredTransactions.length === 0 ? (
-                    <div className="p-16 text-center">
-                      <Icon name="file-text" className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                      <p className="text-base font-bold text-slate-700">{t.noRecords}</p>
+                    <div className="p-12 sm:p-16 text-center">
+                      <Icon name="file-text" className="w-10 sm:w-12 h-10 sm:h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="text-sm sm:text-base font-bold text-slate-700">{t.noRecords}</p>
                       <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">{t.noRecordsSub}</p>
-                      <button
-                        onClick={() => openNewTxModal('income')}
-                        className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition"
-                      >
-                        <Icon name="plus-circle" className="w-4 h-4" />
-                        <span>{t.addEntry}</span>
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => openNewTxModal('income')}
+                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition"
+                        >
+                          <Icon name="plus-circle" className="w-4 h-4" />
+                          <span>{t.addEntry}</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className={`w-full ${isRtl ? 'text-right' : 'text-left'} border-collapse`}>
-                        <thead>
-                          <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b border-slate-200">
-                            <th className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'}`}>{t.colRefDate}</th>
-                            <th className="p-4">{t.colType}</th>
-                            <th className="p-4">{t.colAmount}</th>
-                            <th className="p-4">{t.colAccountFlow}</th>
-                            <th className="p-4">{t.colCategory}</th>
-                            <th className="p-4">{t.colPartner}</th>
-                            <th className="p-4">{t.colNotes}</th>
-                            <th className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'}`}>{t.colActions}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-sm">
-                          {filteredTransactions.map((tx) => {
-                            const amtIQD = toIQD(tx.amount, tx.currency);
-                            const fromAcc = ACCOUNTS[tx.accountId];
-                            const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
+                    <>
+                      {/* Mobile Cards View (Phones & Small Tablets < md) */}
+                      <div className="md:hidden divide-y divide-slate-100">
+                        {filteredTransactions.map((tx) => {
+                          const amtIQD = toIQD(tx.amount, tx.currency);
+                          const fromAcc = ACCOUNTS[tx.accountId];
+                          const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
 
-                            return (
-                              <tr key={tx.id} className="hover:bg-slate-50/70 transition">
-                                <td className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'} whitespace-nowrap`}>
-                                  <span className="font-mono text-xs font-bold text-slate-800">
-                                    {tx.refNumber || tx.id}
-                                  </span>
-                                  <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                                    <Icon name="calendar" className="w-3 h-3" />
-                                    {new Date(tx.date).toLocaleDateString()}
-                                  </div>
-                                </td>
-
-                                <td className="p-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                          return (
+                            <div key={tx.id} className="p-4 space-y-2.5 hover:bg-slate-50/70 transition">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
                                     tx.type === 'income' ? 'bg-emerald-100 text-emerald-800' :
                                     tx.type === 'expense' ? 'bg-rose-100 text-rose-800' :
                                     tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-800' :
                                     'bg-blue-100 text-blue-800'
                                   }`}>
-                                    <span>{tx.type === 'income' ? t.typeIncome : tx.type === 'expense' ? t.typeExpense : tx.type === 'transfer' ? t.typeTransfer : t.typeWithdrawal}</span>
+                                    <Icon name={
+                                      tx.type === 'income' ? 'arrow-down-left' :
+                                      tx.type === 'expense' ? 'arrow-up-right' :
+                                      tx.type === 'withdrawal' ? 'user-check' :
+                                      'arrow-left-right'
+                                    } className="w-3 h-3" />
+                                    <span>
+                                      {tx.type === 'income' ? t.typeIncome :
+                                       tx.type === 'expense' ? t.typeExpense :
+                                       tx.type === 'withdrawal' ? t.typeWithdrawal :
+                                       t.typeTransfer}
+                                    </span>
                                   </span>
-                                </td>
-
-                                <td className="p-4 whitespace-nowrap">
-                                  <div className={`text-sm font-black ${
+                                  <span className="text-[11px] font-mono text-slate-400">
+                                    #{tx.refNumber || tx.id}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-base font-black ${
                                     tx.type === 'income' ? 'text-emerald-600' :
                                     tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
                                     'text-blue-600'
@@ -2184,66 +3565,201 @@
                                     {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
                                     {formatIQD(amtIQD)}
                                   </div>
-                                </td>
-
-                                <td className="p-4 whitespace-nowrap">
-                                  {tx.type === 'transfer' ? (
-                                    <div className="flex items-center gap-1.5 text-xs">
-                                      <span className={`px-2 py-0.5 rounded-md font-semibold border ${fromAcc?.badge}`}>
-                                        {getAccountShortName(fromAcc)}
-                                      </span>
-                                      <span className="text-slate-400">{isRtl ? '←' : '➔'}</span>
-                                      <span className={`px-2 py-0.5 rounded-md font-semibold border ${toAcc?.badge}`}>
-                                        {getAccountShortName(toAcc)}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${fromAcc?.badge}`}>
-                                      {getAccountName(fromAcc)}
-                                    </span>
+                                  {tx.currency === 'USD' && (
+                                    <div className="text-[10px] text-slate-400 font-bold">${tx.amount.toLocaleString()}</div>
                                   )}
-                                </td>
+                                </div>
+                              </div>
 
-                                <td className="p-4 whitespace-nowrap">
-                                  <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
-                                    {tx.category}
-                                  </span>
-                                </td>
-
-                                <td className="p-4 whitespace-nowrap">
-                                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                                    {getPartnerName(tx.partner)}
-                                  </span>
-                                </td>
-
-                                <td className="p-4 text-xs text-slate-600 max-w-xs truncate">
-                                  {tx.notes}
-                                </td>
-
-                                <td className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'} whitespace-nowrap`}>
-                                  <div className={`flex items-center ${isRtl ? 'justify-start' : 'justify-end'} gap-1`}>
-                                    <button
-                                      onClick={() => openEditTxModal(tx)}
-                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg"
-                                      title="Edit"
-                                    >
-                                      <Icon name="edit-3" className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteTx(tx.id)}
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                                      title="Delete"
-                                    >
-                                      <Icon name="trash-2" className="w-4 h-4" />
-                                    </button>
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                {tx.type === 'transfer' ? (
+                                  <div className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md font-semibold text-slate-700 text-[11px]">
+                                    <span>{getAccountShortName(fromAcc)}</span>
+                                    <span className="text-slate-400">➔</span>
+                                    <span>{getAccountShortName(toAcc)}</span>
                                   </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                ) : (
+                                  <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] border ${fromAcc?.badge}`}>
+                                    {getAccountName(fromAcc)}
+                                  </span>
+                                )}
+                                <span className="text-slate-300">•</span>
+                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium text-[11px]">
+                                  {tx.category}
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold text-[11px]">
+                                  {getPartnerName(tx.partner)}
+                                </span>
+                              </div>
+
+                              {tx.notes && (
+                                <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
+                                  {tx.notes}
+                                </p>
+                              )}
+
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 text-[11px] text-slate-400">
+                                <span>{new Date(tx.date).toLocaleDateString()} {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => setViewingTx(tx)}
+                                    className="px-2.5 py-1 text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg font-bold text-xs flex items-center gap-1 transition"
+                                    title="View Record"
+                                  >
+                                    <Icon name="eye" className="w-3.5 h-3.5" />
+                                    <span>View</span>
+                                  </button>
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        onClick={() => openEditTxModal(tx)}
+                                        className="px-2.5 py-1 text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold text-xs flex items-center gap-1"
+                                      >
+                                        <Icon name="edit-3" className="w-3 h-3" />
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteTx(tx.id)}
+                                        className="px-2.5 py-1 text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg font-bold text-xs flex items-center gap-1"
+                                      >
+                                        <Icon name="trash-2" className="w-3 h-3" />
+                                        <span>Delete</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop / Laptop Table View (md and up) */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className={`w-full ${isRtl ? 'text-right' : 'text-left'} border-collapse`}>
+                          <thead>
+                            <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b border-slate-200">
+                              <th className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'}`}>{t.colRefDate}</th>
+                              <th className="p-4">{t.colType}</th>
+                              <th className="p-4">{t.colAmount}</th>
+                              <th className="p-4">{t.colAccountFlow}</th>
+                              <th className="p-4">{t.colCategory}</th>
+                              <th className="p-4">{t.colPartner}</th>
+                              <th className="p-4">{t.colNotes}</th>
+                              <th className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'}`}>{t.colActions}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-sm">
+                            {filteredTransactions.map((tx) => {
+                              const amtIQD = toIQD(tx.amount, tx.currency);
+                              const fromAcc = ACCOUNTS[tx.accountId];
+                              const toAcc = tx.toAccountId ? ACCOUNTS[tx.toAccountId] : null;
+
+                              return (
+                                <tr key={tx.id} className="hover:bg-slate-50/70 transition">
+                                  <td className={`p-4 ${isRtl ? 'pr-6' : 'pl-6'} whitespace-nowrap`}>
+                                    <span className="font-mono text-xs font-bold text-slate-800">
+                                      {tx.refNumber || tx.id}
+                                    </span>
+                                    <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                      <Icon name="calendar" className="w-3 h-3" />
+                                      {new Date(tx.date).toLocaleDateString()}
+                                    </div>
+                                  </td>
+
+                                  <td className="p-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                                      tx.type === 'income' ? 'bg-emerald-100 text-emerald-800' :
+                                      tx.type === 'expense' ? 'bg-rose-100 text-rose-800' :
+                                      tx.type === 'withdrawal' ? 'bg-amber-100 text-amber-800' :
+                                      'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      <span>{tx.type === 'income' ? t.typeIncome : tx.type === 'expense' ? t.typeExpense : tx.type === 'transfer' ? t.typeTransfer : t.typeWithdrawal}</span>
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 whitespace-nowrap">
+                                    <div className={`text-sm font-black ${
+                                      tx.type === 'income' ? 'text-emerald-600' :
+                                      tx.type === 'expense' || tx.type === 'withdrawal' ? 'text-rose-600' :
+                                      'text-blue-600'
+                                    }`}>
+                                      {tx.type === 'income' ? '+' : tx.type === 'expense' || tx.type === 'withdrawal' ? '-' : ''}
+                                      {formatIQD(amtIQD)}
+                                    </div>
+                                  </td>
+
+                                  <td className="p-4 whitespace-nowrap">
+                                    {tx.type === 'transfer' ? (
+                                      <div className="flex items-center gap-1.5 text-xs">
+                                        <span className={`px-2 py-0.5 rounded-md font-semibold border ${fromAcc?.badge}`}>
+                                          {getAccountShortName(fromAcc)}
+                                        </span>
+                                        <span className="text-slate-400">{isRtl ? '←' : '➔'}</span>
+                                        <span className={`px-2 py-0.5 rounded-md font-semibold border ${toAcc?.badge}`}>
+                                          {getAccountShortName(toAcc)}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${fromAcc?.badge}`}>
+                                        {getAccountName(fromAcc)}
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td className="p-4 whitespace-nowrap">
+                                    <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
+                                      {tx.category}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                      {getPartnerName(tx.partner)}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 text-xs text-slate-600 max-w-xs truncate">
+                                    {tx.notes}
+                                  </td>
+
+                                  <td className={`p-4 ${isRtl ? 'pl-6 text-left' : 'pr-6 text-right'} whitespace-nowrap`}>
+                                    <div className={`flex items-center ${isRtl ? 'justify-start' : 'justify-end'} gap-1`}>
+                                      <button
+                                        onClick={() => setViewingTx(tx)}
+                                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                        title="View Record"
+                                      >
+                                        <Icon name="eye" className="w-4 h-4" />
+                                      </button>
+                                      {isAdmin && (
+                                        <>
+                                          <button
+                                            onClick={() => openEditTxModal(tx)}
+                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg"
+                                            title="Edit"
+                                          >
+                                            <Icon name="edit-3" className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteTx(tx.id)}
+                                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                            title="Delete"
+                                          >
+                                            <Icon name="trash-2" className="w-4 h-4" />
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -2259,12 +3775,14 @@
                       {t.partnersHeaderSub}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setIsSettlementModalOpen(true)}
-                    className="px-4 py-2.5 bg-white text-purple-950 font-black text-xs rounded-xl shadow-lg hover:bg-purple-50 transition"
-                  >
-                    {t.configureSimulate}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setIsSettlementModalOpen(true)}
+                      className="px-4 py-2.5 bg-white text-purple-950 font-black text-xs rounded-xl shadow-lg hover:bg-purple-50 transition"
+                    >
+                      {t.configureSimulate}
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2313,24 +3831,26 @@
                           {formatIQD(partnerSettlement.sarwarNetDue)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Loan / Advance')}
-                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
-                          title="Add loan for Sarwar"
-                        >
-                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
-                          <span>+ Add Loan</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Drawing')}
-                          className="px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition"
-                        >
-                          {t.logDrawing}
-                        </button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openLoanModal('Sarwar')}
+                            className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                            title="Add loan for Sarwar"
+                          >
+                            <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                            <span>+ Add Loan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Drawing')}
+                            className="px-3 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition"
+                          >
+                            {t.logDrawing}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2379,25 +3899,209 @@
                           {formatIQD(partnerSettlement.wazhamNetDue)}
                         </p>
                       </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openLoanModal('Wazham')}
+                            className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
+                            title="Add loan for Wazham"
+                          >
+                            <Icon name="hand-coins" className="w-3.5 h-3.5" />
+                            <span>+ Add Loan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Drawing')}
+                            className="px-3 py-2 text-xs font-bold bg-[#AB7431] hover:bg-[#8A5825] text-white rounded-xl shadow-sm transition"
+                          >
+                            {t.logDrawing}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Loans & Debt Management Section */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
                       <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-xl bg-rose-50 text-rose-600">
+                          <Icon name="hand-coins" className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-base font-black text-slate-800">
+                          {lang === 'ku' ? 'تۆماری قەرزەکان و گەڕاندنەوە' : 'Partner Loans & Debts Register'}
+                        </h3>
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                          {loans.filter(l => l.status === 'active').length} {lang === 'ku' ? 'قەرزی ماوە' : 'Active'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {lang === 'ku'
+                          ? 'قەرزە وەرگیراوەکان و دراوەکان. دوای گەڕاندنەوە لە سەرچاوەی دیاریکراو پارەکە زیاد یان کەم دەبێت.'
+                          : 'Track loans borrowed from someone or given to others. Repaying updates chosen account balance.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Filter tabs: All and Active */}
+                      <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600">
                         <button
                           type="button"
-                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Loan / Advance')}
-                          className="px-3 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5"
-                          title="Add loan for Wazham"
+                          onClick={() => setLoanFilter('all')}
+                          className={`px-3 py-1 rounded-lg transition ${loanFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'}`}
                         >
-                          <Icon name="hand-coins" className="w-3.5 h-3.5" />
-                          <span>+ Add Loan</span>
+                          {lang === 'ku' ? 'هەموو' : 'All'} ({loans.length})
                         </button>
                         <button
                           type="button"
-                          onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Drawing')}
-                          className="px-3 py-2 text-xs font-bold bg-[#AB7431] hover:bg-[#8A5825] text-white rounded-xl shadow-sm transition"
+                          onClick={() => setLoanFilter('active')}
+                          className={`px-3 py-1 rounded-lg transition ${loanFilter === 'active' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'}`}
                         >
-                          {t.logDrawing}
+                          {lang === 'ku' ? 'ماوە' : 'Active'} ({loans.filter(l => l.status === 'active').length})
                         </button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Loan List / Cards */}
+                  <div className="space-y-2.5">
+                    {loans.filter(l => loanFilter === 'all' ? true : l.status === loanFilter).length === 0 ? (
+                      <div className="text-center py-8 px-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200">
+                        <Icon name="hand-coins" className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-600">
+                          {lang === 'ku' ? 'هیچ قەرزێک لەم بەشەدا نییە' : 'No loan records found'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {lang === 'ku' ? 'بۆ تۆمارکردنی قەرز، کلیک لەسەر دوگمەی + Add Loan بکە لەسەرەوە.' : 'Click "+ Add Loan" above to record a borrowed or given loan.'}
+                        </p>
+                      </div>
+                    ) : (
+                      loans.filter(l => loanFilter === 'all' ? true : l.status === loanFilter).map((loan) => {
+                        const isBorrowed = loan.direction === 'borrowed';
+                        const isPaid = loan.status === 'paid' || loan.remainingAmount <= 0;
+                        const acc = ACCOUNTS[loan.accountId];
+                        const accName = getAccountShortName(acc);
+
+                        return (
+                          <div
+                            key={loan.id}
+                            className={`p-3.5 sm:p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              isPaid
+                                ? 'bg-slate-50/70 border-slate-200 text-slate-500'
+                                : isBorrowed
+                                ? 'bg-emerald-50/30 border-emerald-200/80 hover:border-emerald-300'
+                                : 'bg-rose-50/30 border-rose-200/80 hover:border-rose-300'
+                            }`}
+                          >
+                            <div className="flex items-start sm:items-center gap-3">
+                              <div className={`p-2.5 rounded-xl shrink-0 ${
+                                isPaid
+                                  ? 'bg-slate-100 text-slate-400'
+                                  : isBorrowed
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                <Icon name={isBorrowed ? 'arrow-down-left' : 'arrow-up-right'} className="w-5 h-5" />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                    isBorrowed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {isBorrowed 
+                                      ? (lang === 'ku' ? '📥 وەرگیراو' : '📥 Borrowed') 
+                                      : (lang === 'ku' ? '📤 دراو' : '📤 Given')}
+                                  </span>
+                                  <span className="text-xs font-black text-slate-800">
+                                    {getPartnerName(loan.partner)}
+                                  </span>
+                                  <span className="text-xs text-slate-400">•</span>
+                                  <span className="text-xs font-bold text-slate-700">
+                                    {isBorrowed 
+                                      ? (lang === 'ku' ? `لە (${loan.personName})` : `from ${loan.personName}`) 
+                                      : (lang === 'ku' ? `بە (${loan.personName})` : `to ${loan.personName}`)}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                                    {accName}
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    isPaid ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {isPaid ? (lang === 'ku' ? '✓ دراوەتەوە' : '✓ Paid') : (lang === 'ku' ? '⏳ ماوە' : '⏳ Active')}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                  {loan.notes} • <span className="font-mono text-slate-400">{new Date(loan.date).toLocaleDateString()}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60">
+                              <div className={isRtl ? 'text-left' : 'text-right'}>
+                                <div className="text-xs text-slate-400 font-medium">
+                                  {lang === 'ku' ? 'بڕی قەرز:' : 'Original:'} <span className="font-mono">{formatIQD(toIQD(loan.amount, loan.currency))}</span>
+                                </div>
+                                <div className="text-sm font-black text-slate-900 font-mono">
+                                  {lang === 'ku' ? 'ماوە:' : 'Remaining:'} <span className={isPaid ? 'text-slate-400' : 'text-rose-600'}>{formatIQD(toIQD(loan.remainingAmount, loan.currency))}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {/* Eye button (View Details) */}
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingLoan(loan)}
+                                  className="p-1.5 rounded-xl text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100 transition shadow-xs"
+                                  title={lang === 'ku' ? 'بینینی وردەکاری' : 'View Loan Details'}
+                                >
+                                  <Icon name="eye" className="w-3.5 h-3.5" />
+                                </button>
+
+                                {isAdmin && (
+                                  <>
+                                    {/* Edit button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditLoanModal(loan)}
+                                      className="p-1.5 rounded-xl text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 transition shadow-xs"
+                                      title={lang === 'ku' ? 'دەستکاریکردن' : 'Edit Loan'}
+                                    >
+                                      <Icon name="edit-3" className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Pay Back button */}
+                                    {!isPaid && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openRepayModal(loan)}
+                                        className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition flex items-center gap-1"
+                                        title="Pay back or collect this loan"
+                                      >
+                                        <Icon name="arrow-left-right" className="w-3.5 h-3.5" />
+                                        <span>{lang === 'ku' ? 'دانەوە' : 'Pay Back'}</span>
+                                      </button>
+                                    )}
+
+                                    {/* Delete button (with confirm modal) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteLoan(loan.id)}
+                                      className="p-1.5 rounded-xl text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 transition shadow-xs"
+                                      title={lang === 'ku' ? 'سڕینەوەی قەرز' : 'Delete Loan'}
+                                    >
+                                      <Icon name="trash-2" className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -2557,7 +4261,7 @@
             )}
 
             {/* TAB: SETTINGS & OPENING BALANCES (نوێ: بەشی ڕێکخستنی سەرمایەی سەرەتا و سڕینەوە) */}
-            {activeTab === 'settings' && (
+            {activeTab === 'settings' && isAdmin && (
               <div className="space-y-8 max-w-4xl mx-auto">
                 {/* Header Card */}
                 <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-xl">
@@ -2640,53 +4344,6 @@
                       </button>
                     </div>
                   </form>
-                </div>
-
-                {/* Danger Zone: Wipe / Reset Data */}
-                <div className="p-6 sm:p-8 rounded-3xl bg-rose-50/60 border border-rose-200 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2.5 rounded-xl bg-rose-100 text-rose-700">
-                      <Icon name="alert-triangle" className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-rose-950">{t.dangerZone}</h3>
-                      <p className="text-xs text-rose-700 mt-0.5">{t.dangerZoneDesc}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
-                    <div className="p-4 rounded-2xl bg-white border border-rose-200 space-y-2 flex flex-col justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900">{t.clearAllTxBtn}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {lang === 'ku' ? 'تەواوی جووڵە داراییەکان دەسڕێتەوە، بەڵام سەرمایەی سەرەتا و باڵانسی ٥ هەژمارەکە دەهێڵێتەوە.' : 'Deletes transaction records while preserving your starting balances.'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleClearAllTransactions}
-                        className="mt-3 w-full py-2.5 px-4 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
-                      >
-                        <Icon name="trash-2" className="w-4 h-4" />
-                        <span>{t.clearAllTxBtn}</span>
-                      </button>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-white border border-rose-300 space-y-2 flex flex-col justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-rose-950">{t.resetEverythingBtn}</h4>
-                        <p className="text-xs text-rose-700 mt-0.5">
-                          {lang === 'ku' ? 'هەموو شتێک بە تەواوی سفر دەکرێتەوە و دەگەڕێتەوە بۆ دۆخی سەرەتا (پاکتاوی ١٠٠٪).' : 'Zeros out all 5 account balances and clears the entire ledger completely.'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleResetEverything}
-                        className="mt-3 w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
-                      >
-                        <Icon name="alert-circle" className="w-4 h-4" />
-                        <span>{t.resetEverythingBtn}</span>
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
@@ -2869,21 +4526,21 @@
 
             {/* ===================== MODAL: ADD NEW USER ===================== */}
             {isAddUserModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-                <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
+                <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl border border-slate-200 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
                   <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-[#FDF2F2] border border-[#F8C8C6] text-[#711612] flex items-center justify-center">
                         <Icon name="user-plus" className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-black text-slate-900">Add Portal User</h3>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900">Add Portal User</h3>
                         <p className="text-xs text-slate-500">Provision a new account with customized access role</p>
                       </div>
                     </div>
                     <button
                       onClick={() => setIsAddUserModalOpen(false)}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
                     >
                       <Icon name="x" className="w-5 h-5" />
                     </button>
@@ -2959,13 +4616,13 @@
                       <button
                         type="button"
                         onClick={() => setIsAddUserModalOpen(false)}
-                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20 transition"
                       >
                         Create User Account
                       </button>
@@ -2977,21 +4634,21 @@
 
             {/* ===================== MODAL: RESET PASSWORD ===================== */}
             {resetPasswordModal.isOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-                <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200">
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
+                <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-8 shadow-2xl border border-slate-200 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
                   <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center">
                         <Icon name="key" className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-black text-slate-900">Reset Password</h3>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900">Reset Password</h3>
                         <p className="text-xs text-slate-500">For @{resetPasswordModal.username} ({resetPasswordModal.name})</p>
                       </div>
                     </div>
                     <button
                       onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
                     >
                       <Icon name="x" className="w-5 h-5" />
                     </button>
@@ -3014,13 +4671,13 @@
                       <button
                         type="button"
                         onClick={() => setResetPasswordModal({ isOpen: false, username: '', name: '', newPassword: '' })}
-                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                        className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20"
+                        className="px-5 py-2.5 bg-gradient-to-r from-[#711612] to-[#94201C] hover:from-[#5A0E0B] hover:to-[#7E1A16] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#711612]/20 transition"
                       >
                         Save Password
                       </button>
@@ -3034,21 +4691,21 @@
 
           {/* MODAL: TRANSACTION */}
           {isTxModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-              <div className="relative w-full max-w-lg rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-8">
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+              <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-0 sm:my-8 max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
                       {editingTx ? t.recordModalTitleEdit : t.recordModalTitleNew}
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">{t.recordModalSub}</p>
                   </div>
-                  <button onClick={closeTxModal} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                  <button onClick={closeTxModal} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
                     <Icon name="x" className="w-4 h-4" />
                   </button>
                 </div>
 
-                <form onSubmit={handleSaveTransaction} className="p-6 space-y-4">
+                <form onSubmit={handleSaveTransaction} className="p-4 sm:p-6 space-y-4 overflow-y-auto">
                   {/* Type buttons */}
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
@@ -3065,10 +4722,11 @@
                             type="button"
                             key={tItem.id}
                             onClick={() => {
+                              setCategoryManagerType(tItem.id);
                               setTxForm({ 
                                 ...txForm, 
                                 type: tItem.id, 
-                                category: TRANSACTION_CATEGORIES[tItem.id][0] || 'General' 
+                                category: (categories[tItem.id] && categories[tItem.id][0]) || 'General' 
                               });
                             }}
                             className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition ${
@@ -3160,13 +4818,31 @@
                   {/* Category & Ref # */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.accountingCategory}</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-600">{t.accountingCategory}</label>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCategoryManagerType(txForm.type);
+                              setNewCategoryName('');
+                              setCategoryManagerError('');
+                              setIsCategoryManagerOpen(true);
+                            }}
+                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition px-1.5 py-0.5 rounded hover:bg-indigo-50"
+                            title={lang === 'ku' ? 'زیادکردن یان سڕینەوەی جۆرەکان' : 'Add or delete categories'}
+                          >
+                            <Icon name="plus-circle" className="w-3.5 h-3.5" />
+                            <span>{lang === 'ku' ? '+ بەڕێوەبردن' : '+ Manage'}</span>
+                          </button>
+                        )}
+                      </div>
                       <select
                         value={txForm.category}
                         onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}
-                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                       >
-                        {(TRANSACTION_CATEGORIES[txForm.type] || []).map((cat) => (
+                        {(categories[txForm.type] || []).map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
@@ -3176,10 +4852,11 @@
                       <label className="block text-xs font-bold text-slate-600 mb-1">{t.refInvoiceNum}</label>
                       <input
                         type="text"
-                        placeholder="e.g. ORD-9821"
-                        value={txForm.refNumber}
-                        onChange={(e) => setTxForm({ ...txForm, refNumber: e.target.value })}
-                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                        readOnly
+                        tabIndex="-1"
+                        value={txForm.refNumber || generateNextInvoiceNumber(transactions)}
+                        className="w-full p-2.5 text-xs font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200 rounded-xl cursor-not-allowed select-all focus:outline-none"
+                        title={lang === 'ku' ? 'ژمارەی پسوولە خۆکارە و ناگۆڕدرێت' : 'Order invoice is automatically generated and unchangeable.'}
                       />
                     </div>
                   </div>
@@ -3213,13 +4890,13 @@
                     <button
                       type="button"
                       onClick={closeTxModal}
-                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
                     >
                       {t.cancel}
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-[#711612]/25"
+                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-[#711612]/25 transition"
                     >
                       {editingTx ? t.updateEntry : t.postToLedger}
                     </button>
@@ -3231,14 +4908,14 @@
 
           {/* MODAL: TRANSFER */}
           {isTransferModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-              <div className="relative w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-2xl p-6 space-y-4">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+              <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div>
                     <h3 className="text-base font-black text-slate-900">{t.quickTransferTitle}</h3>
                     <p className="text-xs text-slate-400 mt-0.5">{t.quickTransferSub}</p>
                   </div>
-                  <button onClick={() => setIsTransferModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                  <button onClick={() => setIsTransferModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
                     <Icon name="x" className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -3267,7 +4944,7 @@
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1">{t.sourceAccount}</label>
                       <select
@@ -3324,13 +5001,13 @@
                     <button
                       type="button"
                       onClick={() => setIsTransferModalOpen(false)}
-                      className="flex-1 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 rounded-xl"
+                      className="flex-1 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition"
                     >
                       {t.cancel}
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md"
+                      className="flex-1 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition"
                     >
                       {t.executeTransfer}
                     </button>
@@ -3342,19 +5019,19 @@
 
           {/* MODAL: SETTLEMENT SIMULATOR */}
           {isSettlementModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-              <div className="relative w-full max-w-xl rounded-3xl bg-white border border-slate-200 shadow-2xl p-6 space-y-6">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+              <div className="relative w-full max-w-xl rounded-t-3xl sm:rounded-3xl bg-white border border-slate-200 shadow-2xl p-5 sm:p-6 space-y-5 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2">
                     <Icon name="calculator" className="w-5 h-5 text-purple-600" />
                     <h3 className="text-base font-black text-slate-900">{t.settlementTitle}</h3>
                   </div>
-                  <button onClick={() => setIsSettlementModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                  <button onClick={() => setIsSettlementModalOpen(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
                     <Icon name="x" className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-5">
                   {/* Slider */}
                   <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200 space-y-3">
                     <div className="flex items-center justify-between text-xs font-bold text-purple-950">
@@ -3377,8 +5054,8 @@
                   </div>
 
                   {/* Settlement Calculation Table */}
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs">
-                    <table className={`w-full ${isRtl ? 'text-right' : 'text-left'}`}>
+                  <div className="border border-slate-200 rounded-2xl overflow-x-auto text-xs">
+                    <table className={`w-full min-w-[460px] ${isRtl ? 'text-right' : 'text-left'}`}>
                       <thead className="bg-slate-50 font-bold text-slate-500">
                         <tr>
                           <th className="p-3">{t.colPartner}</th>
@@ -3414,7 +5091,7 @@
                   <div className="flex justify-end">
                     <button
                       onClick={() => setIsSettlementModalOpen(false)}
-                      className="px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl"
+                      className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition"
                     >
                       {t.closeSimulator}
                     </button>
@@ -3424,8 +5101,62 @@
             </div>
           )}
 
+          {/* Mobile Bottom Navigation Bar (Visible only on small mobile screens < sm) */}
+          <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-2xl px-2 py-1.5 flex items-center justify-around pb-safe">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                activeTab === 'dashboard' ? 'text-[#711612] font-black' : 'text-slate-500 font-semibold'
+              }`}
+            >
+              <Icon name="building-2" className="w-5 h-5" />
+              <span className="text-[10px]">Overview</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('transactions')}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                activeTab === 'transactions' ? 'text-[#711612] font-black' : 'text-slate-500 font-semibold'
+              }`}
+            >
+              <Icon name="file-text" className="w-5 h-5" />
+              <span className="text-[10px]">Ledger</span>
+            </button>
+
+            {/* Quick Add Floating Button (Admins only) */}
+            {isAdmin && (
+              <button
+                onClick={() => openNewTxModal('income')}
+                className="flex flex-col items-center justify-center -mt-5 w-12 h-12 rounded-full bg-gradient-to-tr from-[#711612] to-[#94201C] text-white shadow-lg shadow-[#711612]/40 active:scale-95 transition"
+                title="Add Transaction"
+              >
+                <Icon name="plus" className="w-6 h-6 stroke-[2.5]" />
+              </button>
+            )}
+
+            <button
+              onClick={() => setActiveTab('partners')}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                activeTab === 'partners' ? 'text-[#711612] font-black' : 'text-slate-500 font-semibold'
+              }`}
+            >
+              <Icon name="users" className="w-5 h-5" />
+              <span className="text-[10px]">Partners</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab(isAdmin ? 'settings' : 'analytics')}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                activeTab === (isAdmin ? 'settings' : 'analytics') ? 'text-[#711612] font-black' : 'text-slate-500 font-semibold'
+              }`}
+            >
+              <Icon name={isAdmin ? "sliders" : "bar-chart-3"} className="w-5 h-5" />
+              <span className="text-[10px]">{isAdmin ? 'Settings' : 'Analytics'}</span>
+            </button>
+          </nav>
+
           {/* Footer */}
-          <footer className="mt-16 border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+          <footer className="mt-12 sm:mt-16 border-t border-slate-200 py-6 text-center text-xs text-slate-400">
             <p>{t.footerText}</p>
           </footer>
         </div>
