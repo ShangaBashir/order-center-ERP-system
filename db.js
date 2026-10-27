@@ -36,6 +36,9 @@ db.exec(`
     account_id TEXT NOT NULL,
     to_account_id TEXT,
     amount REAL NOT NULL,
+    currency TEXT DEFAULT 'IQD',
+    exchange_rate REAL DEFAULT 1500,
+    amount_iqd REAL,
     category TEXT NOT NULL,
     partner TEXT NOT NULL,
     notes TEXT,
@@ -58,6 +61,11 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// Migrations: ensure columns exist
+try { db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'IQD'"); } catch (e) {}
+try { db.exec("ALTER TABLE transactions ADD COLUMN exchange_rate REAL DEFAULT 1500"); } catch (e) {}
+try { db.exec("ALTER TABLE transactions ADD COLUMN amount_iqd REAL"); } catch (e) {}
 
 // Seed default users if empty
 const countUsersRow = db.prepare('SELECT COUNT(*) as count FROM users').get();
@@ -192,6 +200,9 @@ module.exports = {
       accountId: t.account_id,
       toAccountId: t.to_account_id,
       amount: t.amount,
+      currency: t.currency || 'IQD',
+      exchangeRate: t.exchange_rate || 1500,
+      amountIQD: t.amount_iqd !== null && t.amount_iqd !== undefined ? t.amount_iqd : (t.currency === 'USD' ? (Number(t.amount) * (t.exchange_rate || 1500)) : Number(t.amount)),
       category: t.category,
       partner: t.partner,
       notes: t.notes,
@@ -204,16 +215,22 @@ module.exports = {
 
   createTransaction: (tx, createdBy) => {
     const id = tx.id || 'tx_' + Date.now();
-    const createdAt = new Date().toISOString();
+    const createdAt = tx.createdAt || new Date().toISOString();
+    const rate = Number(tx.exchangeRate) || 1500;
+    const currency = tx.currency || 'IQD';
+    const amountIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (currency === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
     db.prepare(`
-      INSERT INTO transactions (id, type, account_id, to_account_id, amount, category, partner, notes, ref_number, date, created_at, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (id, type, account_id, to_account_id, amount, currency, exchange_rate, amount_iqd, category, partner, notes, ref_number, date, created_at, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       tx.type,
       tx.accountId,
       tx.toAccountId || null,
       Number(tx.amount),
+      currency,
+      rate,
+      amountIQD,
       tx.category,
       tx.partner,
       tx.notes || '',
@@ -222,19 +239,25 @@ module.exports = {
       createdAt,
       createdBy || 'Wazham'
     );
-    return { ...tx, id, createdAt, createdBy };
+    return { ...tx, id, currency, exchangeRate: rate, amountIQD, createdAt, createdBy };
   },
 
   updateTransaction: (id, tx) => {
+    const rate = Number(tx.exchangeRate) || 1500;
+    const currency = tx.currency || 'IQD';
+    const amountIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (currency === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
     db.prepare(`
       UPDATE transactions 
-      SET type = ?, account_id = ?, to_account_id = ?, amount = ?, category = ?, partner = ?, notes = ?, ref_number = ?, date = ?
+      SET type = ?, account_id = ?, to_account_id = ?, amount = ?, currency = ?, exchange_rate = ?, amount_iqd = ?, category = ?, partner = ?, notes = ?, ref_number = ?, date = ?
       WHERE id = ?
     `).run(
       tx.type,
       tx.accountId,
       tx.toAccountId || null,
       Number(tx.amount),
+      currency,
+      rate,
+      amountIQD,
       tx.category,
       tx.partner,
       tx.notes || '',
@@ -242,7 +265,7 @@ module.exports = {
       tx.date,
       id
     );
-    return { ...tx, id };
+    return { ...tx, id, currency, exchangeRate: rate, amountIQD };
   },
 
   deleteTransaction: (id) => {
