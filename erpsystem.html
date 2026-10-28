@@ -350,7 +350,8 @@
         'Software & Telephony',
         'Packaging & Supplies',
         'Merchant Payout / Refund',
-        'General Operations'
+        'General Operations',
+        'Partner Drawing'
       ],
       transfer: ['Internal Account Rebalance', 'Cash to Bank Deposit', 'Bank to Card Top-up'],
       withdrawal: ['Partner Drawing', 'Partner Loan / Advance', 'Dividend Payout', 'Personal Expense Reimbursement']
@@ -5339,7 +5340,7 @@
                         </div>
 
                         {isAdmin && (
-                          <div className="pt-1">
+                          <div className="pt-1 grid grid-cols-2 gap-2">
                             <button
                               type="button"
                               onClick={() => openLoanModal('Sarwar')}
@@ -5347,6 +5348,15 @@
                             >
                               <Icon name="hand-coins" className="w-3.5 h-3.5" />
                               <span>+ Add Loan</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openNewTxModal('withdrawal', 'Sarwar', 'Partner Drawing')}
+                              className="w-full py-1.5 px-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-2xs transition flex items-center justify-center gap-1.5"
+                              title={lang === 'ku' ? 'تۆمارکردنی کێشانەوە بۆ سەروەر' : 'Log partner drawing for Sarwar'}
+                            >
+                              <Icon name="wallet" className="w-3.5 h-3.5" />
+                              <span>{lang === 'ku' ? 'کێشانەوە' : 'Log Drawing'}</span>
                             </button>
                           </div>
                         )}
@@ -5388,7 +5398,7 @@
                         </div>
 
                         {isAdmin && (
-                          <div className="pt-1">
+                          <div className="pt-1 grid grid-cols-2 gap-2">
                             <button
                               type="button"
                               onClick={() => openLoanModal('Wazham')}
@@ -5396,6 +5406,15 @@
                             >
                               <Icon name="hand-coins" className="w-3.5 h-3.5" />
                               <span>+ Add Loan</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openNewTxModal('withdrawal', 'Wazham', 'Partner Drawing')}
+                              className="w-full py-1.5 px-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-2xs transition flex items-center justify-center gap-1.5"
+                              title={lang === 'ku' ? 'تۆمارکردنی کێشانەوە بۆ واژام' : 'Log partner drawing for Wazham'}
+                            >
+                              <Icon name="wallet" className="w-3.5 h-3.5" />
+                              <span>{lang === 'ku' ? 'کێشانەوە' : 'Log Drawing'}</span>
                             </button>
                           </div>
                         )}
@@ -7044,305 +7063,331 @@
 
           {/* MODAL: TRANSACTION */}
           {isTxModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
-              <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-0 sm:my-8 max-h-[92vh] sm:max-h-[90vh] flex flex-col">
-                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-5 overflow-y-auto">
+              <div className="relative w-full max-w-4xl rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]">
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-slate-900">
                       {editingTx ? t.recordModalTitleEdit : t.recordModalTitleNew}
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">{t.recordModalSub}</p>
                   </div>
-                  <button onClick={closeTxModal} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
+                  <button 
+                    type="button"
+                    onClick={closeTxModal} 
+                    className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition"
+                  >
                     <Icon name="x" className="w-4 h-4" />
                   </button>
                 </div>
 
-                <form onSubmit={handleSaveTransaction} className="p-4 sm:p-6 space-y-4 overflow-y-auto">
-                  {/* Type buttons */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {[
-                        { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500', activeBg: 'bg-emerald-600 text-white border-emerald-600' },
-                        { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500', activeBg: 'bg-rose-600 text-white border-rose-600' },
-                        { id: 'withdrawal', label: lang === 'ku' ? 'ڕاکێشانی هاوبەش' : 'Partner Drawing', icon: 'wallet', color: 'text-blue-500', activeBg: 'bg-blue-600 text-white border-blue-600' },
-                        { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right', color: 'text-indigo-500', activeBg: 'bg-[#711612] text-white border-[#711612]' }
-                      ].map((tItem) => {
-                        const isSelected = txForm.type === tItem.id;
-                        return (
-                          <button
-                            type="button"
-                            key={tItem.id}
-                            onClick={() => {
-                              setCategoryManagerType(tItem.id);
-                              setTxForm({ 
-                                ...txForm, 
-                                type: tItem.id, 
-                                category: (categories[tItem.id] && categories[tItem.id][0]) || (tItem.id === 'withdrawal' ? 'Partner Drawing' : 'General'),
-                                partner: tItem.id === 'withdrawal' && !txForm.partner ? 'Wazham' : txForm.partner
-                              });
-                            }}
-                            className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-bold transition shadow-xs ${
-                              isSelected
-                                ? `${tItem.activeBg} shadow-md ring-2 ring-offset-1`
-                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <Icon name={tItem.icon} className={`w-4 h-4 ${isSelected ? 'text-white' : tItem.color}`} />
-                            <span className="truncate">{tItem.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Amount & Currency */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.amountCurrency}</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        placeholder="e.g. 500000"
-                        value={txForm.amount}
-                        onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
-                        className="w-full p-2.5 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
-                      <select
-                        value={txForm.currency}
-                        onChange={(e) => setTxForm({ ...txForm, currency: e.target.value })}
-                        className="p-2.5 font-bold text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-800"
-                      >
-                        <option value="IQD">{lang === 'ku' ? 'دینار (د.ع)' : 'IQD'}</option>
-                        <option value="USD">{lang === 'ku' ? 'دۆلار ($)' : 'USD'}</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* USD Exchange Rate Toggle */}
-                  {/* USD Exchange Rate Toggle */}
-                  {txForm.currency === 'USD' && (() => {
-                    const effectiveRate = txForm.useDefaultRate
-                      ? (editingTx?.exchangeRate || exchangeRate)
-                      : (Number(txForm.customRate) || exchangeRate);
-                    const amtNum = Number(txForm.amount) || 0;
-                    const totalIQD = amtNum * effectiveRate;
-
-                    return (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
+                <form onSubmit={handleSaveTransaction} className="flex-1 flex flex-col min-h-0">
+                  <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 overflow-y-auto">
+                    {/* Left Column: Classification, Amount & Currency, USD toggle, Accounts */}
+                    <div className="space-y-4">
+                      {txForm.type === 'withdrawal' && (
+                        <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
-                            <Icon name="badge-dollar-sign" className="w-4 h-4 text-emerald-600" />
-                            <span className="text-xs font-bold text-slate-700">
-                              {lang === 'ku' ? 'نرخی دۆلاری سێتینگ بەکاربهێنە' : 'Use Settings Dollar Rate'}
-                            </span>
-                            <span className="text-[10px] font-semibold text-slate-400">
-                              (1 USD = {exchangeRate.toLocaleString()} IQD)
+                            <Icon name="wallet" className="w-4 h-4 text-blue-600" />
+                            <span className="font-bold text-blue-950">
+                              {lang === 'ku' 
+                                ? `ڕاکێشانی دارایی بۆ ${getPartnerName(txForm.partner)}` 
+                                : `Partner Drawing: ${getPartnerName(txForm.partner)}`}
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setTxForm(prev => ({ ...prev, useDefaultRate: !prev.useDefaultRate, customRate: '' }))}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                              txForm.useDefaultRate ? 'bg-emerald-500' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-                                txForm.useDefaultRate ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+                            {lang === 'ku' ? 'کێشانەوەی هاوبەش' : 'Partner Drawing'}
+                          </span>
                         </div>
-                        {!txForm.useDefaultRate && (
-                          <div className="mt-2.5">
-                            <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                              {lang === 'ku' ? 'نرخی دۆلاری دەستی (1 USD = ? IQD)' : 'Custom Dollar Rate (1 USD = ? IQD)'}
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              placeholder={lang === 'ku' ? 'نرخی دۆلار بنووسە بە دەستی...' : 'Enter dollar rate manually...'}
-                              value={txForm.customRate}
-                              onChange={(e) => setTxForm({ ...txForm, customRate: e.target.value })}
-                              className="w-full p-2.5 text-sm font-bold bg-white border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                              autoFocus
-                            />
-                          </div>
-                        )}
+                      )}
 
-                        {/* Live IQD conversion display: Always visible when amount > 0 */}
-                        {amtNum > 0 && (
-                          <div className="pt-2.5 mt-2.5 border-t border-slate-200/80 flex items-center justify-between text-xs animate-in fade-in">
-                            <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
-                              <span>💵 {amtNum.toLocaleString()} USD</span>
-                              <span className="text-slate-400">×</span>
-                              <span>{effectiveRate.toLocaleString()} IQD</span>
-                            </div>
-                            <div className="font-black text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 font-mono">
-                              = {formatIQD(totalIQD)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Accounts */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">
-                        {txForm.type === 'transfer' ? t.sourceAccount : t.accountTarget}
-                      </label>
-                      <select
-                        value={txForm.accountId}
-                        onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}
-                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
-                      >
-                        {Object.values(ACCOUNTS).map((acc) => (
-                          <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {txForm.type === 'transfer' ? (
+                      {/* Type buttons: Income, Expense, Transfer */}
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.destAccount}</label>
-                        <select
-                          value={txForm.toAccountId}
-                          onChange={(e) => setTxForm({ ...txForm, toAccountId: e.target.value })}
-                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
-                        >
-                          {Object.values(ACCOUNTS)
-                            .filter(a => a.id !== txForm.accountId)
-                            .map((acc) => (
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500', activeBg: 'bg-emerald-600 text-white border-emerald-600' },
+                            { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500', activeBg: 'bg-rose-600 text-white border-rose-600' },
+                            { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right', color: 'text-indigo-500', activeBg: 'bg-[#711612] text-white border-[#711612]' }
+                          ].map((tItem) => {
+                            const isSelected = txForm.type === tItem.id;
+                            return (
+                              <button
+                                type="button"
+                                key={tItem.id}
+                                onClick={() => {
+                                  setCategoryManagerType(tItem.id);
+                                  setTxForm({ 
+                                    ...txForm, 
+                                    type: tItem.id, 
+                                    category: (categories[tItem.id] && categories[tItem.id][0]) || 'General',
+                                    partner: txForm.partner
+                                  });
+                                }}
+                                className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border text-xs font-bold transition shadow-2xs ${
+                                  isSelected
+                                    ? `${tItem.activeBg} shadow-sm ring-2 ring-offset-1`
+                                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <Icon name={tItem.icon} className={`w-4 h-4 ${isSelected ? 'text-white' : tItem.color}`} />
+                                <span className="truncate">{tItem.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Amount & Currency */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.amountCurrency}</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            required
+                            placeholder="e.g. 500000"
+                            value={txForm.amount}
+                            onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
+                            className="w-full p-2.5 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                          />
+                          <select
+                            value={txForm.currency}
+                            onChange={(e) => setTxForm({ ...txForm, currency: e.target.value })}
+                            className="p-2.5 font-bold text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-800"
+                          >
+                            <option value="IQD">{lang === 'ku' ? 'دینار (د.ع)' : 'IQD'}</option>
+                            <option value="USD">{lang === 'ku' ? 'دۆلار ($)' : 'USD'}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* USD Exchange Rate Toggle */}
+                      {txForm.currency === 'USD' && (() => {
+                        const effectiveRate = txForm.useDefaultRate
+                          ? (editingTx?.exchangeRate || exchangeRate)
+                          : (Number(txForm.customRate) || exchangeRate);
+                        const amtNum = Number(txForm.amount) || 0;
+                        const totalIQD = amtNum * effectiveRate;
+
+                        return (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Icon name="badge-dollar-sign" className="w-4 h-4 text-emerald-600" />
+                                <span className="text-xs font-bold text-slate-700">
+                                  {lang === 'ku' ? 'نرخی دۆلاری سێتینگ بەکاربهێنە' : 'Use Settings Dollar Rate'}
+                                </span>
+                                <span className="text-[10px] font-semibold text-slate-400">
+                                  (1 USD = {exchangeRate.toLocaleString()} IQD)
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setTxForm(prev => ({ ...prev, useDefaultRate: !prev.useDefaultRate, customRate: '' }))}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                                  txForm.useDefaultRate ? 'bg-emerald-500' : 'bg-slate-300'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+                                    txForm.useDefaultRate ? 'translate-x-6' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                            {!txForm.useDefaultRate && (
+                              <div className="mt-2.5">
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                                  {lang === 'ku' ? 'نرخی دۆلاری دەستی (1 USD = ? IQD)' : 'Custom Dollar Rate (1 USD = ? IQD)'}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder={lang === 'ku' ? 'نرخی دۆلار بنووسە بە دەستی...' : 'Enter dollar rate manually...'}
+                                  value={txForm.customRate}
+                                  onChange={(e) => setTxForm({ ...txForm, customRate: e.target.value })}
+                                  className="w-full p-2.5 text-sm font-bold bg-white border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+
+                            {amtNum > 0 && (
+                              <div className="pt-2.5 mt-2.5 border-t border-slate-200/80 flex items-center justify-between text-xs animate-in fade-in">
+                                <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
+                                  <span>💵 {amtNum.toLocaleString()} USD</span>
+                                  <span className="text-slate-400">×</span>
+                                  <span>{effectiveRate.toLocaleString()} IQD</span>
+                                </div>
+                                <div className="font-black text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 font-mono">
+                                  = {formatIQD(totalIQD)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Accounts */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">
+                            {txForm.type === 'transfer' ? t.sourceAccount : t.accountTarget}
+                          </label>
+                          <select
+                            value={txForm.accountId}
+                            onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}
+                            className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                          >
+                            {Object.values(ACCOUNTS).map((acc) => (
                               <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
                             ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <label className={`text-xs font-bold whitespace-nowrap ${txForm.type === 'withdrawal' ? 'text-blue-900' : 'text-slate-600'}`}>
-                            {txForm.type === 'withdrawal'
-                              ? (lang === 'ku' ? 'هاوبەشی ڕاکێشەر (کێ پارەکەی بردووە) *' : 'Drawing Partner (Who withdrew funds) *')
-                              : t.associatedPartner}
-                          </label>
-                          {txForm.type !== 'withdrawal' && (
-                            <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
-                              {lang === 'ku' ? '(ئارەزوومەندانە)' : '(Optional)'}
-                            </span>
-                          )}
+                          </select>
                         </div>
-                        <select
-                          required={txForm.type === 'withdrawal'}
-                          value={txForm.partner || ''}
-                          onChange={(e) => setTxForm({ ...txForm, partner: e.target.value })}
-                          className={`w-full p-2.5 text-xs font-bold rounded-xl focus:ring-2 focus:outline-none transition ${
-                            txForm.type === 'withdrawal'
-                              ? 'bg-blue-50/70 border border-blue-300 text-blue-950 focus:ring-blue-500'
-                              : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-indigo-500'
-                          }`}
-                        >
-                          {txForm.type !== 'withdrawal' && (
-                            <option value="">
-                              {lang === 'ku' ? 'هیچکام / کۆمپانیا (گشتی)' : 'None / Company-wide (Optional)'}
-                            </option>
-                          )}
-                          {PARTNERS.map((p) => (
-                            <option key={p} value={p}>{getPartnerName(p)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Category & Ref # */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-xs font-bold text-slate-600">{t.accountingCategory}</label>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCategoryManagerType(txForm.type);
-                              setNewCategoryName('');
-                              setCategoryManagerError('');
-                              setIsCategoryManagerOpen(true);
-                            }}
-                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition px-1.5 py-0.5 rounded hover:bg-indigo-50"
-                            title={lang === 'ku' ? 'زیادکردن یان سڕینەوەی جۆرەکان' : 'Add or delete categories'}
-                          >
-                            <Icon name="plus-circle" className="w-3.5 h-3.5" />
-                            <span>{lang === 'ku' ? '+ بەڕێوەبردن' : '+ Manage'}</span>
-                          </button>
+                        {txForm.type === 'transfer' ? (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1">{t.destAccount}</label>
+                            <select
+                              value={txForm.toAccountId}
+                              onChange={(e) => setTxForm({ ...txForm, toAccountId: e.target.value })}
+                              className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+                            >
+                              {Object.values(ACCOUNTS)
+                                .filter(a => a.id !== txForm.accountId)
+                                .map((acc) => (
+                                  <option key={acc.id} value={acc.id}>{getAccountName(acc)}</option>
+                                ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <label className={`text-xs font-bold whitespace-nowrap ${txForm.type === 'withdrawal' ? 'text-blue-900' : 'text-slate-600'}`}>
+                                {txForm.type === 'withdrawal'
+                                  ? (lang === 'ku' ? 'هاوبەشی ڕاکێشەر (کێ پارەکەی بردووە) *' : 'Drawing Partner (Who withdrew funds) *')
+                                  : t.associatedPartner}
+                              </label>
+                              {txForm.type !== 'withdrawal' && (
+                                <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
+                                  {lang === 'ku' ? '(ئارەزوومەندانە)' : '(Optional)'}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              required={txForm.type === 'withdrawal'}
+                              value={txForm.partner || ''}
+                              onChange={(e) => setTxForm({ ...txForm, partner: e.target.value })}
+                              className={`w-full p-2.5 text-xs font-bold rounded-xl focus:ring-2 focus:outline-none transition ${
+                                txForm.type === 'withdrawal'
+                                  ? 'bg-blue-50/70 border border-blue-300 text-blue-950 focus:ring-blue-500'
+                                  : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-indigo-500'
+                              }`}
+                            >
+                              {txForm.type !== 'withdrawal' && (
+                                <option value="">
+                                  {lang === 'ku' ? 'هیچکام / کۆمپانیا (گشتی)' : 'None / Company-wide (Optional)'}
+                                </option>
+                              )}
+                              {PARTNERS.map((p) => (
+                                <option key={p} value={p}>{getPartnerName(p)}</option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </div>
-                      <select
-                        value={txForm.category}
-                        onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}
-                        className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      >
-                        {(categories[txForm.type] || []).map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">{t.refInvoiceNum}</label>
-                      <input
-                        type="text"
-                        readOnly
-                        tabIndex="-1"
-                        value={txForm.refNumber || generateNextInvoiceNumber(transactions)}
-                        className="w-full p-2.5 text-xs font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200 rounded-xl cursor-not-allowed select-all focus:outline-none"
-                        title={lang === 'ku' ? 'ژمارەی پسوولە خۆکارە و ناگۆڕدرێت' : 'Order invoice is automatically generated and unchangeable.'}
-                      />
+                    {/* Right Column: Category & Ref#, Reason & Memo, Date & Time */}
+                    <div className="space-y-4">
+                      {/* Category & Ref # */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-bold text-slate-600">{t.accountingCategory}</label>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCategoryManagerType(txForm.type);
+                                  setNewCategoryName('');
+                                  setCategoryManagerError('');
+                                  setIsCategoryManagerOpen(true);
+                                }}
+                                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition px-1.5 py-0.5 rounded hover:bg-indigo-50"
+                                title={lang === 'ku' ? 'زیادکردن یان سڕینەوەی جۆرەکان' : 'Add or delete categories'}
+                              >
+                                <Icon name="plus-circle" className="w-3.5 h-3.5" />
+                                <span>{lang === 'ku' ? '+ بەڕێوەبردن' : '+ Manage'}</span>
+                              </button>
+                            )}
+                          </div>
+                          <select
+                            value={txForm.category}
+                            onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}
+                            className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          >
+                            {(categories[txForm.type] || categories['expense'] || []).map((cat) => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">{t.refInvoiceNum}</label>
+                          <input
+                            type="text"
+                            readOnly
+                            tabIndex="-1"
+                            value={txForm.refNumber || generateNextInvoiceNumber(transactions)}
+                            className="w-full p-2.5 text-xs font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200 rounded-xl cursor-not-allowed select-all focus:outline-none"
+                            title={lang === 'ku' ? 'ژمارەی پسوولە خۆکارە و ناگۆڕدرێت' : 'Order invoice is automatically generated and unchangeable.'}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Notes / Reason Memo */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.reasonMemo}</label>
+                        <textarea
+                          rows="2"
+                          required
+                          placeholder={t.memoPlaceholder}
+                          value={txForm.notes}
+                          onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
+                          className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl resize-none focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Date and Time */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{t.dateTimeMovement}</label>
+                        <input
+                          type="datetime-local"
+                          value={txForm.date}
+                          onChange={(e) => setTxForm({ ...txForm, date: e.target.value })}
+                          className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.reasonMemo}</label>
-                    <textarea
-                      rows="3"
-                      required
-                      placeholder={t.memoPlaceholder}
-                      value={txForm.notes}
-                      onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl resize-none"
-                    />
-                  </div>
-
-                  {/* Date */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">{t.dateTimeMovement}</label>
-                    <input
-                      type="datetime-local"
-                      value={txForm.date}
-                      onChange={(e) => setTxForm({ ...txForm, date: e.target.value })}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
-                    />
-                  </div>
-
-                  {/* Buttons */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
+                  {/* Pinned Action Bar: fully visible at the bottom without any scrolling */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200/80 rounded-b-2xl sm:rounded-b-3xl shrink-0 flex items-center justify-end gap-2.5">
                     <button
                       type="button"
                       onClick={closeTxModal}
-                      className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                      className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition"
                     >
                       {t.cancel}
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-[#711612]/25 transition"
+                      className="px-6 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-[#711612]/20 transition flex items-center gap-1.5"
                     >
-                      {editingTx ? t.updateEntry : t.postToLedger}
+                      <Icon name="check" className="w-4 h-4" />
+                      <span>{editingTx ? t.updateEntry : t.postToLedger}</span>
                     </button>
                   </div>
                 </form>
