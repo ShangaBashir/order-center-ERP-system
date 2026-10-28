@@ -8,10 +8,11 @@ yarn-error.log*
 .env
 .env.local
 
-# SQLite temporary and lock files
+# SQLite temporary, lock, and backup files
 data/*.db-wal
 data/*.db-shm
 data/*.db-journal
+data/backups/
 
 # Operating system files
 Thumbs.db
