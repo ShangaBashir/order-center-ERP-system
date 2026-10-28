@@ -2031,6 +2031,15 @@
         return Object.values(accountBalances).reduce((acc, curr) => acc + curr, 0);
       }, [accountBalances]);
 
+      // Helper function to resolve partner key (supports Sarwar/سەروەر and Wazham/واژام)
+      const getPartnerKey = (p) => {
+        if (!p) return null;
+        const s = p.toString().trim().toLowerCase();
+        if (s === 'sarwar' || s === 'سەروەر') return 'Sarwar';
+        if (s === 'wazham' || s === 'واژام') return 'Wazham';
+        return null;
+      };
+
       // Metrics & Analytics
       const metrics = useMemo(() => {
         let totalRevenue = 0;
@@ -2043,50 +2052,64 @@
         transactions.forEach((tx) => {
           const amtIQD = toIQD(tx);
           const cat = (tx.category || '').toLowerCase();
-          const isLoan = cat.includes('loan') || cat.includes('advance');
+          const isLoan = cat.includes('loan') || cat.includes('advance') || cat.includes('قەرز') || cat.includes('fee recovery');
+          const isDrawing = tx.type === 'withdrawal' || cat.includes('drawing') || cat.includes('ڕاکێشان');
+          const pKey = getPartnerKey(tx.partner);
 
-          if (tx.type === 'withdrawal') {
+          if (isDrawing || tx.type === 'withdrawal') {
             if (isLoan) {
-              if (tx.partner && partnerLoans[tx.partner] !== undefined) {
-                partnerLoans[tx.partner] += amtIQD;
+              if (pKey) {
+                partnerLoans[pKey] += amtIQD;
               }
             } else {
-              if (tx.partner && partnerWithdrawals[tx.partner] !== undefined) {
-                partnerWithdrawals[tx.partner] += amtIQD;
+              if (pKey) {
+                partnerWithdrawals[pKey] += amtIQD;
               }
             }
           } else if (tx.type === 'income') {
             if (isLoan) {
-              if (tx.partner && partnerLoans[tx.partner] !== undefined) {
-                partnerLoans[tx.partner] = Math.max(0, partnerLoans[tx.partner] - amtIQD);
+              if (pKey) {
+                partnerLoans[pKey] = Math.max(0, partnerLoans[pKey] - amtIQD);
               }
             } else {
               // "in Income it will be only that money the person bring it"
-              if (tx.partner === 'Sarwar') {
+              if (pKey === 'Sarwar') {
                 partnerIncomes.Sarwar += amtIQD;
-              } else if (tx.partner === 'Wazham') {
+              } else if (pKey === 'Wazham') {
                 partnerIncomes.Wazham += amtIQD;
               } else {
                 companyGeneralIncome += amtIQD;
               }
+              totalRevenue += amtIQD;
             }
-            totalRevenue += amtIQD;
           } else if (tx.type === 'expense') {
             // "also for expense the money will be decreased from the total not from income for the people"
-            totalExpenses += amtIQD;
+            if (!isLoan && !isDrawing) {
+              totalExpenses += amtIQD;
+            }
           }
         });
 
-        const loansFromState = { Sarwar: 0, Wazham: 0 };
+        const partnerLoansGiven = { Sarwar: 0, Wazham: 0 };
+        const partnerLoansBorrowed = { Sarwar: 0, Wazham: 0 };
+
         loans.forEach(l => {
-          if (l.status === 'active' && l.direction === 'given' && loansFromState[l.partner] !== undefined) {
-            loansFromState[l.partner] += toIQD({ ...l, amount: l.remainingAmount });
+          if (l.status === 'active') {
+            const pKey = getPartnerKey(l.personName) || (getPartnerKey(l.partner) && (!l.personName || l.personName === l.partner));
+            if (pKey) {
+              const rem = toIQD({ ...l, amount: l.remainingAmount });
+              if (l.direction === 'given') {
+                partnerLoansGiven[pKey] += rem;
+              } else if (l.direction === 'borrowed') {
+                partnerLoansBorrowed[pKey] += rem;
+              }
+            }
           }
         });
 
         const effectivePartnerLoans = {
-          Sarwar: loans.length > 0 ? loansFromState.Sarwar : partnerLoans.Sarwar,
-          Wazham: loans.length > 0 ? loansFromState.Wazham : partnerLoans.Wazham
+          Sarwar: loans.length > 0 ? partnerLoansGiven.Sarwar : partnerLoans.Sarwar,
+          Wazham: loans.length > 0 ? partnerLoansGiven.Wazham : partnerLoans.Wazham
         };
 
         const netProfit = totalRevenue - totalExpenses;
@@ -2102,7 +2125,9 @@
           netProfit,
           netRetained,
           partnerWithdrawals,
-          partnerLoans: effectivePartnerLoans
+          partnerLoans: effectivePartnerLoans,
+          partnerLoansGiven,
+          partnerLoansBorrowed
         };
       }, [transactions, loans]);
 
@@ -2122,6 +2147,7 @@
 
           const partnerMatch = 
             selectedPartnerFilter === 'all' || 
+            getPartnerKey(tx.partner) === selectedPartnerFilter || 
             tx.partner === selectedPartnerFilter;
 
           const typeMatch = 
@@ -2257,6 +2283,11 @@
         e.preventDefault();
         if (!txForm.amount || Number(txForm.amount) <= 0) return;
 
+        if (txForm.type === 'withdrawal' && !txForm.partner) {
+          triggerToast(lang === 'ku' ? 'تکایە هاوبەش دیاریبکە بۆ ڕاکێشانی هاوبەش' : 'Please select a partner for the drawing');
+          return;
+        }
+
         const autoRef = txForm.refNumber || generateNextInvoiceNumber(transactions);
         const lockedRate = txForm.useDefaultRate
           ? (editingTx?.exchangeRate || exchangeRate)
@@ -2296,7 +2327,11 @@
               console.warn('[API] Could not save transaction to server:', err);
             }
           }
-          triggerToast(lang === 'ku' ? 'جووڵەی دارایی نوێ تۆمارکرا' : 'Transaction logged!');
+          triggerToast(
+            txForm.type === 'withdrawal'
+              ? (lang === 'ku' ? `ڕاکێشانی دارایی بۆ ${getPartnerName(newTx.partner)} تۆمارکرا` : `Drawing for ${newTx.partner} recorded!`)
+              : (lang === 'ku' ? 'جووڵەی دارایی نوێ تۆمارکرا' : 'Transaction logged!')
+          );
         }
         closeTxModal();
       };
@@ -2566,7 +2601,7 @@
         const isFullPayoff = newRemaining === 0;
 
         const txType = isBorrowed ? 'expense' : 'income';
-        const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Client Fee Recovery';
+        const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Company Loan Repayment';
         const defaultMemo = isBorrowed
           ? (isFullPayoff
               ? (lang === 'ku' ? `دانەوەی تەواوەتی قەرزی (${repayingLoan.personName}) لە ڕێگەی ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Full settlement of loan borrowed from ${repayingLoan.personName} via ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
@@ -2892,8 +2927,11 @@
         const sarwarLoan = metrics.partnerLoans.Sarwar;
         const wazhamLoan = metrics.partnerLoans.Wazham;
 
-        const sarwarNetDue = sarwarIncome - sarwarWithdrawn - sarwarLoan;
-        const wazhamNetDue = wazhamIncome - wazhamWithdrawn - wazhamLoan;
+        const sarwarLoanBorrowed = (metrics.partnerLoansBorrowed && metrics.partnerLoansBorrowed.Sarwar) || 0;
+        const wazhamLoanBorrowed = (metrics.partnerLoansBorrowed && metrics.partnerLoansBorrowed.Wazham) || 0;
+
+        const sarwarNetDue = sarwarIncome + sarwarLoanBorrowed - sarwarWithdrawn - sarwarLoan;
+        const wazhamNetDue = wazhamIncome + wazhamLoanBorrowed - wazhamWithdrawn - wazhamLoan;
 
         return {
           sarwarIncome,
@@ -2904,6 +2942,8 @@
           wazhamWithdrawn,
           sarwarLoan,
           wazhamLoan,
+          sarwarLoanBorrowed,
+          wazhamLoanBorrowed,
           sarwarNetDue,
           wazhamNetDue
         };
@@ -2916,7 +2956,14 @@
         if (!p || p === 'none' || p === 'Company' || p === 'General') {
           return lang === 'ku' ? 'کۆمپانیا (گشتی)' : 'Company (General)';
         }
-        return p === 'Sarwar' ? (lang === 'ku' ? 'سەروەر' : 'Sarwar') : (lang === 'ku' ? 'واژام' : 'Wazham');
+        const s = p.toString().trim().toLowerCase();
+        if (s === 'sarwar' || s === 'سەروەر') {
+          return lang === 'ku' ? 'سەروەر' : 'Sarwar';
+        }
+        if (s === 'wazham' || s === 'واژام') {
+          return lang === 'ku' ? 'واژام' : 'Wazham';
+        }
+        return p;
       };
 
       if (!currentUser) {
@@ -6151,6 +6198,20 @@
                       </div>
                     </div>
 
+                    {partnerSettlement.sarwarLoanBorrowed > 0 && (
+                      <div className="p-3 rounded-2xl bg-teal-50/70 border border-teal-200 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Icon name="arrow-down-left" className="w-4 h-4 text-teal-600" />
+                          <span className="font-bold text-teal-900">
+                            {lang === 'ku' ? 'قەرزی هاوبەش لای کۆمپانیا:' : 'Loan Lent to Company:'}
+                          </span>
+                        </div>
+                        <span className="font-black text-teal-800 font-mono">
+                          +{formatIQD(partnerSettlement.sarwarLoanBorrowed)}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/60 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <span className="text-xs font-bold text-blue-900">{t.netDueTo} {getPartnerName('Sarwar')}:</span>
@@ -6158,7 +6219,9 @@
                           {formatIQD(partnerSettlement.sarwarNetDue)}
                         </p>
                         <p className="text-[10px] text-blue-700/80 mt-0.5">
-                          {lang === 'ku' ? 'داهاتی هێنراو - ڕاکێشان - قەرزی ماوە' : 'Income Brought - Drawings - Active Loan'}
+                          {partnerSettlement.sarwarLoanBorrowed > 0
+                            ? (lang === 'ku' ? 'داهاتی هێنراو + قەرز بە کۆمپانیا - ڕاکێشان - قەرزی ماوە' : 'Income + Lent to Co. - Drawings - Active Loan')
+                            : (lang === 'ku' ? 'داهاتی هێنراو - ڕاکێشان - قەرزی ماوە' : 'Income Brought - Drawings - Active Loan')}
                         </p>
                       </div>
                       {isAdmin && (
@@ -6213,14 +6276,30 @@
                       </div>
                     </div>
 
-                    <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF0DC]/70 border border-[#F4E0BB] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    {partnerSettlement.wazhamLoanBorrowed > 0 && (
+                      <div className="p-3 rounded-2xl bg-teal-50/70 border border-teal-200 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Icon name="arrow-down-left" className="w-4 h-4 text-teal-600" />
+                          <span className="font-bold text-teal-900">
+                            {lang === 'ku' ? 'قەرزی هاوبەش لای کۆمپانیا:' : 'Loan Lent to Company:'}
+                          </span>
+                        </div>
+                        <span className="font-black text-teal-800 font-mono">
+                          +{formatIQD(partnerSettlement.wazhamLoanBorrowed)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/60 border border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <span className="text-xs font-bold text-[#704522]">{t.netDueTo} {getPartnerName('Wazham')}:</span>
-                        <p className="text-xl font-black text-[#5C391E] mt-0.5">
+                        <span className="text-xs font-bold text-purple-900">{t.netDueTo} {getPartnerName('Wazham')}:</span>
+                        <p className="text-xl font-black text-purple-950 mt-0.5">
                           {formatIQD(partnerSettlement.wazhamNetDue)}
                         </p>
-                        <p className="text-[10px] text-[#704522]/80 mt-0.5">
-                          {lang === 'ku' ? 'داهاتی هێنراو - ڕاکێشان - قەرزی ماوە' : 'Income Brought - Drawings - Active Loan'}
+                        <p className="text-[10px] text-purple-700/80 mt-0.5">
+                          {partnerSettlement.wazhamLoanBorrowed > 0
+                            ? (lang === 'ku' ? 'داهاتی هێنراو + قەرز بە کۆمپانیا - ڕاکێشان - قەرزی ماوە' : 'Income + Lent to Co. - Drawings - Active Loan')
+                            : (lang === 'ku' ? 'داهاتی هێنراو - ڕاکێشان - قەرزی ماوە' : 'Income Brought - Drawings - Active Loan')}
                         </p>
                       </div>
                       {isAdmin && (
@@ -6350,32 +6429,38 @@
                                       ? (lang === 'ku' ? '📥 کۆمپانیا وەریگرتووە' : '📥 Company Took Loan') 
                                       : (lang === 'ku' ? '📤 کۆمپانیا داویەتی' : '📤 Company Gave Loan')}
                                   </span>
-                                  {loan.personName === 'Sarwar' || loan.personName === 'Wazham' ? (
-                                    <span className="text-xs font-black text-slate-800">
-                                      {isBorrowed 
-                                        ? (lang === 'ku' ? `لە ${getPartnerName(loan.personName)}ەوە` : `From ${loan.personName}`)
-                                        : (lang === 'ku' ? `بە ${getPartnerName(loan.personName)}` : `To ${loan.personName}`)}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="text-xs font-semibold text-slate-500">
-                                        {isBorrowed ? (lang === 'ku' ? 'لە' : 'from') : (lang === 'ku' ? 'بە' : 'to')}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setSelectedPerson(loan.personName)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 border border-indigo-200/60 font-black text-xs transition cursor-pointer shadow-xs group"
-                                        title={`View ${loan.personName}'s full statement & loan history`}
-                                      >
-                                        <Icon name="user" className="w-3.5 h-3.5 text-indigo-500" />
-                                        <span>{loan.personName}</span>
-                                        <span className="text-[10px] text-indigo-400 font-bold group-hover:translate-x-0.5 transition">&rarr; Page</span>
-                                      </button>
-                                      <span className="text-[10px] text-slate-400">
-                                        ({lang === 'ku' ? 'سەرپەرشتیار:' : 'via'} {getPartnerName(loan.partner)})
-                                      </span>
-                                    </>
-                                  )}
+                                  {(() => {
+                                    const pMatch = getPartnerKey(loan.personName) || (getPartnerKey(loan.partner) && (!loan.personName || loan.personName === loan.partner));
+                                    if (pMatch) {
+                                      return (
+                                        <span className="text-xs font-black text-slate-800">
+                                          {isBorrowed 
+                                            ? (lang === 'ku' ? `لە ${getPartnerName(pMatch)}ەوە` : `From ${pMatch}`)
+                                            : (lang === 'ku' ? `بە ${getPartnerName(pMatch)}` : `To ${pMatch}`)}
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <>
+                                        <span className="text-xs font-semibold text-slate-500">
+                                          {isBorrowed ? (lang === 'ku' ? 'لە' : 'from') : (lang === 'ku' ? 'بە' : 'to')}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedPerson(loan.personName)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 border border-indigo-200/60 font-black text-xs transition cursor-pointer shadow-xs group"
+                                          title={`View ${loan.personName}'s full statement & loan history`}
+                                        >
+                                          <Icon name="user" className="w-3.5 h-3.5 text-indigo-500" />
+                                          <span>{loan.personName}</span>
+                                          <span className="text-[10px] text-indigo-400 font-bold group-hover:translate-x-0.5 transition">&rarr; Page</span>
+                                        </button>
+                                        <span className="text-[10px] text-slate-400">
+                                          ({lang === 'ku' ? 'سەرپەرشتیار:' : 'via'} {getPartnerName(loan.partner)})
+                                        </span>
+                                      </>
+                                    );
+                                  })()}
                                   <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
                                     {accName}
                                   </span>
@@ -7106,11 +7191,12 @@
                   {/* Type buttons */}
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.txClassification}</label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
-                        { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500' },
-                        { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500' },
-                        { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right', color: 'text-blue-500' }
+                        { id: 'income', label: t.typeIncome, icon: 'arrow-down-left', color: 'text-emerald-500', activeBg: 'bg-emerald-600 text-white border-emerald-600' },
+                        { id: 'expense', label: t.typeExpense, icon: 'arrow-up-right', color: 'text-rose-500', activeBg: 'bg-rose-600 text-white border-rose-600' },
+                        { id: 'withdrawal', label: lang === 'ku' ? 'ڕاکێشانی هاوبەش' : 'Partner Drawing', icon: 'wallet', color: 'text-blue-500', activeBg: 'bg-blue-600 text-white border-blue-600' },
+                        { id: 'transfer', label: t.typeTransfer, icon: 'arrow-left-right', color: 'text-indigo-500', activeBg: 'bg-[#711612] text-white border-[#711612]' }
                       ].map((tItem) => {
                         const isSelected = txForm.type === tItem.id;
                         return (
@@ -7122,12 +7208,13 @@
                               setTxForm({ 
                                 ...txForm, 
                                 type: tItem.id, 
-                                category: (categories[tItem.id] && categories[tItem.id][0]) || 'General' 
+                                category: (categories[tItem.id] && categories[tItem.id][0]) || (tItem.id === 'withdrawal' ? 'Partner Drawing' : 'General'),
+                                partner: tItem.id === 'withdrawal' && !txForm.partner ? 'Wazham' : txForm.partner
                               });
                             }}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition ${
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-bold transition shadow-xs ${
                               isSelected
-                                ? 'bg-[#711612] text-white border-[#711612] shadow-md'
+                                ? `${tItem.activeBg} shadow-md ring-2 ring-offset-1`
                                 : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                             }`}
                           >
@@ -7267,19 +7354,32 @@
                     ) : (
                       <div>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <label className="text-xs font-bold text-slate-600 whitespace-nowrap">{t.associatedPartner}</label>
-                          <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
-                            {lang === 'ku' ? '(ئارەزوومەندانە)' : '(Optional)'}
-                          </span>
+                          <label className={`text-xs font-bold whitespace-nowrap ${txForm.type === 'withdrawal' ? 'text-blue-900' : 'text-slate-600'}`}>
+                            {txForm.type === 'withdrawal'
+                              ? (lang === 'ku' ? 'هاوبەشی ڕاکێشەر (کێ پارەکەی بردووە) *' : 'Drawing Partner (Who withdrew funds) *')
+                              : t.associatedPartner}
+                          </label>
+                          {txForm.type !== 'withdrawal' && (
+                            <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">
+                              {lang === 'ku' ? '(ئارەزوومەندانە)' : '(Optional)'}
+                            </span>
+                          )}
                         </div>
                         <select
+                          required={txForm.type === 'withdrawal'}
                           value={txForm.partner || ''}
                           onChange={(e) => setTxForm({ ...txForm, partner: e.target.value })}
-                          className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          className={`w-full p-2.5 text-xs font-bold rounded-xl focus:ring-2 focus:outline-none transition ${
+                            txForm.type === 'withdrawal'
+                              ? 'bg-blue-50/70 border border-blue-300 text-blue-950 focus:ring-blue-500'
+                              : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-indigo-500'
+                          }`}
                         >
-                          <option value="">
-                            {lang === 'ku' ? 'هیچکام / کۆمپانیا (گشتی)' : 'None / Company-wide (Optional)'}
-                          </option>
+                          {txForm.type !== 'withdrawal' && (
+                            <option value="">
+                              {lang === 'ku' ? 'هیچکام / کۆمپانیا (گشتی)' : 'None / Company-wide (Optional)'}
+                            </option>
+                          )}
                           {PARTNERS.map((p) => (
                             <option key={p} value={p}>{getPartnerName(p)}</option>
                           ))}
