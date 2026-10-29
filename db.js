@@ -93,36 +93,49 @@ db.exec(`
     tx_id TEXT,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
+
+// High-entropy collision-proof ID generator (prevents clashing saves from colliding)
+function generateSecureId(prefix = 'REC') {
+  const ts = Date.now().toString(36);
+  const rnd = crypto.randomBytes(6).toString('hex');
+  return `${prefix}_${ts}_${rnd}`;
+}
 
 // Migrations: ensure columns exist
 try { db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT DEFAULT 'IQD'"); } catch (e) {}
 try { db.exec("ALTER TABLE transactions ADD COLUMN exchange_rate REAL DEFAULT 1500"); } catch (e) {}
 try { db.exec("ALTER TABLE transactions ADD COLUMN amount_iqd REAL"); } catch (e) {}
 
-// Seed default users if empty
+// Seed default users ONLY on initial installation when users table is completely empty
+// (Fixes E-C7: deleted accounts will never return on reboot with public passwords)
 const countUsersRow = db.prepare('SELECT COUNT(*) as count FROM users').get();
+const countUsers = countUsersRow ? countUsersRow.count : 0;
 const now = new Date().toISOString().split('T')[0];
 
-// Upsert helper to ensure default accounts are always ready
-const ensureUser = (id, name, username, password, role, partner) => {
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.toLowerCase());
-  if (!existing) {
-    db.prepare(`
-      INSERT INTO users (id, name, username, password_hash, role, partner, active, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    `).run(id, name, username.toLowerCase(), hashPassword(password), role, partner, now);
-  } else {
-    db.prepare(`
-      UPDATE users SET active = 1, role = ?, partner = ? WHERE username = ?
-    `).run(role, partner, username.toLowerCase());
-  }
-};
+if (countUsers === 0) {
+  const insertUser = db.prepare(`
+    INSERT INTO users (id, name, username, password_hash, role, partner, active, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+  `);
+  insertUser.run('usr_admin', 'Wazham', 'admin', hashPassword('admin123'), 'admin', 'Wazham', now);
+  insertUser.run('usr_wazham', 'Wazham', 'wazham', hashPassword('admin123'), 'admin', 'Wazham', now);
+  insertUser.run('usr_sarwar', 'Sarwar', 'sarwar', hashPassword('sarwar123'), 'user', 'Sarwar', now);
+  insertUser.run('usr_staff', 'Staff User', 'user', hashPassword('user123'), 'user', 'Staff', now);
+  console.log('[DB] Seeded initial portal accounts for fresh setup.');
+}
 
-ensureUser('usr_admin', 'Wazham', 'admin', 'admin123', 'admin', 'Wazham');
-ensureUser('usr_wazham', 'Wazham', 'wazham', 'admin123', 'admin', 'Wazham');
-ensureUser('usr_sarwar', 'Sarwar', 'sarwar', 'sarwar123', 'user', 'Sarwar');
-ensureUser('usr_staff', 'Staff User', 'user', 'user123', 'user', 'Staff');
+// Seed default exchange rate in system_settings if not present
+const existingRate = db.prepare("SELECT value FROM system_settings WHERE key = 'exchange_rate'").get();
+if (!existingRate) {
+  db.prepare("INSERT INTO system_settings (key, value, updated_at) VALUES ('exchange_rate', '1500', ?)").run(new Date().toISOString());
+}
 
 // Seed opening balances if empty
 const countBalancesRow = db.prepare('SELECT COUNT(*) as count FROM opening_balances').get();
@@ -131,8 +144,8 @@ const countBalances = countBalancesRow ? countBalancesRow.count : 0;
 if (countBalances === 0) {
   const accounts = ['fib', 'cihan', 'qi', 'hyperpost', 'cash'];
   const insertStmt = db.prepare('INSERT INTO opening_balances (account_id, amount, updated_at) VALUES (?, ?, ?)');
-  const now = new Date().toISOString();
-  accounts.forEach(acc => insertStmt.run(acc, 0, now));
+  const nowIso = new Date().toISOString();
+  accounts.forEach(acc => insertStmt.run(acc, 0, nowIso));
   console.log('[DB] Seeded 5 account opening balances.');
 }
 
@@ -152,7 +165,10 @@ module.exports = {
   },
 
   getAllUsers: () => {
-    return db.prepare('SELECT id, name, username, role, partner, active, created_at FROM users ORDER BY created_at ASC').all();
+    return db.prepare('SELECT id, name, username, role, partner, active, created_at FROM users ORDER BY created_at ASC').all().map(u => ({
+      ...u,
+      createdAt: u.created_at || new Date().toISOString().split('T')[0]
+    }));
   },
 
   createUser: ({ name, username, password, role, partner }) => {
@@ -166,7 +182,7 @@ module.exports = {
       VALUES (?, ?, ?, ?, ?, ?, 1, ?)
     `).run(id, name.trim(), username.trim().toLowerCase(), passwordHash, assignedRole, partner || 'Staff', createdAt);
 
-    return { id, name: name.trim(), username: username.trim().toLowerCase(), role: assignedRole, partner: partner || 'Staff', active: 1, created_at: createdAt };
+    return { id, name: name.trim(), username: username.trim().toLowerCase(), role: assignedRole, partner: partner || 'Staff', active: 1, created_at: createdAt, createdAt };
   },
 
   updateUserStatus: (id, active) => {
@@ -230,7 +246,11 @@ module.exports = {
   },
 
   createTransaction: (tx, createdBy) => {
-    const id = tx.id || 'tx_' + Date.now();
+    // Generate guaranteed unique collision-proof ID if not provided or clashing (Fixes E-C2)
+    let id = tx.id;
+    if (!id || id.length < 10 || db.prepare('SELECT id FROM transactions WHERE id = ?').get(id)) {
+      id = generateSecureId('TX');
+    }
     const createdAt = tx.createdAt || new Date().toISOString();
     const rate = Number(tx.exchangeRate) || 1500;
     const currency = tx.currency || 'IQD';
@@ -255,6 +275,33 @@ module.exports = {
       createdAt,
       createdBy || 'Wazham'
     );
+
+    // E-C4 Fix: If transaction is a Company Loan (Taken), ensure corresponding debt is booked in loans table
+    const catLower = (tx.category || '').toLowerCase();
+    if (catLower.includes('company loan (taken)') || (tx.type === 'income' && catLower.includes('loan'))) {
+      const existingLoan = db.prepare('SELECT id FROM loans WHERE tx_id = ?').get(id);
+      if (!existingLoan) {
+        const loanId = generateSecureId('LN');
+        db.prepare(`
+          INSERT INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
+          VALUES (?, 'borrowed', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+        `).run(
+          loanId,
+          tx.partner || 'Wazham',
+          tx.partner || 'Partner',
+          Number(tx.amount),
+          currency,
+          rate,
+          tx.accountId || 'fib',
+          Number(tx.amount),
+          tx.date,
+          tx.notes || 'Partner loan to company (Liability booked)',
+          id,
+          createdAt
+        );
+      }
+    }
+
     return { ...tx, id, currency, exchangeRate: rate, amountIQD, createdAt, createdBy };
   },
 
@@ -315,30 +362,38 @@ module.exports = {
   },
 
   createLoan: (loan) => {
-    const id = loan.id || 'LN-' + Date.now().toString().slice(-5);
-    const createdAt = loan.createdAt || new Date().toISOString();
+    // Fix E-C3: Never use clashing 5-digit clock slice; generate collision-proof ID
+    let id = loan.id;
+    if (!id || id.length < 10 || db.prepare('SELECT id FROM loans WHERE id = ?').get(id)) {
+      id = generateSecureId('LN');
+    }
+    const createdAt = loan.createdAt || new Date().toISOString().split('T')[0];
     const rate = Number(loan.exchangeRate) || 1500;
     const currency = loan.currency || 'IQD';
+    const rem = Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount) || 0;
+    const st = loan.status || (rem === 0 ? 'paid' : 'active');
+
+    // Fix E-C3: Use INSERT INTO instead of INSERT OR REPLACE to prevent clashing loans from silently replacing another loan
     db.prepare(`
-      INSERT OR REPLACE INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
+      INSERT INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      loan.direction,
-      loan.partner,
-      loan.personName || loan.person_name || '',
-      Number(loan.amount),
+      loan.direction || 'borrowed',
+      loan.partner || 'Staff',
+      (loan.personName || loan.person_name || '').trim(),
+      Number(loan.amount) || 0,
       currency,
       rate,
-      loan.accountId || loan.account_id,
-      Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount),
-      loan.status || 'active',
-      loan.date,
+      loan.accountId || loan.account_id || 'fib',
+      rem,
+      st,
+      loan.date || new Date().toISOString(),
       loan.notes || '',
       loan.txId || loan.tx_id || null,
       createdAt
     );
-    return { ...loan, id, currency, exchangeRate: rate, createdAt };
+    return { ...loan, id, currency, exchangeRate: rate, remainingAmount: rem, status: st, createdAt };
   },
 
   updateLoan: (id, updates) => {
@@ -412,7 +467,10 @@ module.exports = {
   },
 
   createLoanRepayment: (rep) => {
-    const id = rep.id || 'REP-' + Date.now().toString().slice(-5);
+    let id = rep.id;
+    if (!id || id.length < 10 || db.prepare('SELECT id FROM loan_repayments WHERE id = ?').get(id)) {
+      id = generateSecureId('REP');
+    }
     const createdAt = rep.createdAt || new Date().toISOString();
     const rate = Number(rep.exchangeRate) || 1500;
     const curr = rep.currency || 'IQD';
@@ -466,6 +524,19 @@ module.exports = {
     return balances;
   },
 
+  // Centralized System Settings & Exchange Rate Operations (Fixes W-C1)
+  getExchangeRate: () => {
+    const row = db.prepare("SELECT value FROM system_settings WHERE key = 'exchange_rate'").get();
+    return row ? Number(row.value) || 1500 : 1500;
+  },
+
+  setExchangeRate: (rate) => {
+    const num = Number(rate) || 1500;
+    const nowIso = new Date().toISOString();
+    db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('exchange_rate', ?, ?)").run(String(num), nowIso);
+    return num;
+  },
+
   // Backup & Restore System
   createBackup: () => {
     const timestamp = new Date().toISOString();
@@ -474,11 +545,13 @@ module.exports = {
     const loans = module.exports.getAllLoans();
     const loanRepayments = module.exports.getAllLoanRepayments();
     const users = db.prepare('SELECT id, name, username, role, partner, active, created_at FROM users').all();
+    const exchangeRate = module.exports.getExchangeRate();
     
     return {
       version: '2.5.0',
       system: 'Order Center ERP',
       exportedAt: timestamp,
+      exchangeRate,
       transactions,
       openingBalances,
       loans,
@@ -487,101 +560,138 @@ module.exports = {
     };
   },
 
+  // Fix E-C6: Robust atomic restore with pre-validation, safety snapshot, and transaction rollback
   restoreBackup: (data) => {
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data payload.');
 
-    // 1. Restore opening balances
-    if (data.openingBalances && typeof data.openingBalances === 'object') {
-      module.exports.setOpeningBalances(data.openingBalances);
+    // Pre-validation to prevent wiping the ledger with corrupt or empty backup files
+    const hasTxs = Array.isArray(data.transactions) && data.transactions.length > 0;
+    const hasBalances = data.openingBalances && typeof data.openingBalances === 'object';
+    const hasLoans = Array.isArray(data.loans);
+
+    if (!hasTxs && !hasBalances && !hasLoans) {
+      throw new Error('Backup payload contains no valid ERP records (transactions, balances, or loans). Restore aborted to protect existing data.');
     }
 
-    // 2. Restore transactions
-    if (Array.isArray(data.transactions)) {
-      db.prepare('DELETE FROM transactions').run();
-      const insertTx = db.prepare(`
-        INSERT INTO transactions (id, type, account_id, to_account_id, amount, currency, exchange_rate, amount_iqd, category, partner, notes, ref_number, date, created_at, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      data.transactions.forEach(tx => {
-        const rate = Number(tx.exchangeRate) || 1500;
-        const curr = tx.currency || 'IQD';
-        const amtIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (curr === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
-        insertTx.run(
-          tx.id || ('TX-' + Date.now().toString().slice(-5)),
-          tx.type,
-          tx.accountId,
-          tx.toAccountId || null,
-          Number(tx.amount) || 0,
-          curr,
-          rate,
-          amtIQD,
-          tx.category || 'General Operations',
-          tx.partner || 'Staff',
-          tx.notes || '',
-          tx.refNumber || '',
-          tx.date || new Date().toISOString(),
-          tx.createdAt || new Date().toISOString(),
-          tx.createdBy || 'Wazham'
-        );
-      });
+    // Safety Snapshot: Always write pre-restore safety copy to disk before making any changes
+    try {
+      const safetySnapshot = module.exports.createBackup();
+      const backupsDir = path.join(dataDir, 'backups');
+      if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(backupsDir, `ordercenter_prerestore_safety_${Date.now()}.json`),
+        JSON.stringify(safetySnapshot, null, 2),
+        'utf-8'
+      );
+    } catch (snapErr) {
+      console.warn('[DB] Could not write pre-restore safety snapshot:', snapErr);
     }
 
-    // 3. Restore loans
-    if (Array.isArray(data.loans)) {
-      db.prepare('DELETE FROM loans').run();
-      const insertLoan = db.prepare(`
-        INSERT INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      data.loans.forEach(loan => {
-        insertLoan.run(
-          loan.id || ('LN-' + Date.now().toString().slice(-5)),
-          loan.direction || 'borrowed',
-          loan.partner || 'Staff',
-          loan.personName || loan.person_name || '',
-          Number(loan.amount) || 0,
-          loan.currency || 'IQD',
-          Number(loan.exchangeRate) || 1500,
-          loan.accountId || loan.account_id || 'fib',
-          Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount) || 0,
-          loan.status || 'active',
-          loan.date || new Date().toISOString(),
-          loan.notes || '',
-          loan.txId || loan.tx_id || null,
-          loan.createdAt || new Date().toISOString()
-        );
-      });
-    }
+    // Wrap entire restore inside an atomic SQLite transaction
+    db.exec('BEGIN TRANSACTION');
+    try {
+      // 1. Restore opening balances if provided
+      if (hasBalances) {
+        module.exports.setOpeningBalances(data.openingBalances);
+      }
 
-    // 4. Restore loan repayments
-    if (Array.isArray(data.loanRepayments)) {
-      db.prepare('DELETE FROM loan_repayments').run();
-      const insertRep = db.prepare(`
-        INSERT INTO loan_repayments (id, loan_id, person_name, partner, amount, currency, exchange_rate, amount_iqd, account_id, date, notes, tx_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      data.loanRepayments.forEach(rep => {
-        const rate = Number(rep.exchangeRate) || 1500;
-        const curr = rep.currency || 'IQD';
-        const amtIQD = rep.amountIQD !== undefined ? Number(rep.amountIQD) : (curr === 'USD' ? (Number(rep.amount) * rate) : Number(rep.amount));
-        insertRep.run(
-          rep.id || ('REP-' + Date.now().toString().slice(-5)),
-          rep.loanId || rep.loan_id,
-          rep.personName || rep.person_name || '',
-          rep.partner || 'Staff',
-          Number(rep.amount) || 0,
-          curr,
-          rate,
-          amtIQD,
-          rep.accountId || rep.account_id || 'fib',
-          rep.date || new Date().toISOString(),
-          rep.notes || '',
-          rep.txId || rep.tx_id || null,
-          rep.createdAt || new Date().toISOString()
-        );
-      });
-    }
+      // 2. Restore transactions (only if valid non-empty array provided)
+      if (hasTxs) {
+        db.prepare('DELETE FROM transactions').run();
+        const insertTx = db.prepare(`
+          INSERT INTO transactions (id, type, account_id, to_account_id, amount, currency, exchange_rate, amount_iqd, category, partner, notes, ref_number, date, created_at, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        data.transactions.forEach(tx => {
+          const rate = Number(tx.exchangeRate) || 1500;
+          const curr = tx.currency || 'IQD';
+          const amtIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (curr === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
+          insertTx.run(
+            tx.id || generateSecureId('TX'),
+            tx.type,
+            tx.accountId,
+            tx.toAccountId || null,
+            Number(tx.amount) || 0,
+            curr,
+            rate,
+            amtIQD,
+            tx.category || 'General Operations',
+            tx.partner || 'Staff',
+            tx.notes || '',
+            tx.refNumber || '',
+            tx.date || new Date().toISOString(),
+            tx.createdAt || new Date().toISOString(),
+            tx.createdBy || 'Wazham'
+          );
+        });
+      }
 
-    return true;
+      // 3. Restore loans safely
+      if (hasLoans) {
+        db.prepare('DELETE FROM loans').run();
+        const insertLoan = db.prepare(`
+          INSERT INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        data.loans.forEach(loan => {
+          insertLoan.run(
+            loan.id || generateSecureId('LN'),
+            loan.direction || 'borrowed',
+            loan.partner || 'Staff',
+            loan.personName || loan.person_name || '',
+            Number(loan.amount) || 0,
+            loan.currency || 'IQD',
+            Number(loan.exchangeRate) || 1500,
+            loan.accountId || loan.account_id || 'fib',
+            Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount) || 0,
+            loan.status || 'active',
+            loan.date || new Date().toISOString(),
+            loan.notes || '',
+            loan.txId || loan.tx_id || null,
+            loan.createdAt || new Date().toISOString()
+          );
+        });
+      }
+
+      // 4. Restore loan repayments safely
+      if (Array.isArray(data.loanRepayments)) {
+        db.prepare('DELETE FROM loan_repayments').run();
+        const insertRep = db.prepare(`
+          INSERT INTO loan_repayments (id, loan_id, person_name, partner, amount, currency, exchange_rate, amount_iqd, account_id, date, notes, tx_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        data.loanRepayments.forEach(rep => {
+          const rate = Number(rep.exchangeRate) || 1500;
+          const curr = rep.currency || 'IQD';
+          const amtIQD = rep.amountIQD !== undefined ? Number(rep.amountIQD) : (curr === 'USD' ? (Number(rep.amount) * rate) : Number(rep.amount));
+          insertRep.run(
+            rep.id || generateSecureId('REP'),
+            rep.loanId || rep.loan_id,
+            rep.personName || rep.person_name || '',
+            rep.partner || 'Staff',
+            Number(rep.amount) || 0,
+            curr,
+            rate,
+            amtIQD,
+            rep.accountId || rep.account_id || 'fib',
+            rep.date || new Date().toISOString(),
+            rep.notes || '',
+            rep.txId || rep.tx_id || null,
+            rep.createdAt || new Date().toISOString()
+          );
+        });
+      }
+
+      // 5. Restore exchange rate if provided
+      if (data.exchangeRate) {
+        module.exports.setExchangeRate(data.exchangeRate);
+      }
+
+      db.exec('COMMIT');
+      return true;
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 };

