@@ -54,6 +54,21 @@ A modern, full-stack ERP system built for **Order Center (Global Shopping & Ship
 
 ---
 
+## 🏛️ System Architecture & Decoupled Services
+
+Order Center operates as a suite of **independent, decoupled services** to guarantee operational resilience, data security, and isolated scaling:
+
+| Application | Service Focus | Port / Tech | Repository / Location |
+| :--- | :--- | :--- | :--- |
+| **Order Center ERP** | Treasury, Multi-Account Liquidity, Partner Equity & Loans, Ledger | Port `3000` (Node.js + SQLite) | `order-center-ERP-system` |
+| **Order Center Platform** | Customer Storefront, Package Tracking, Orders API | Frontend `5173`, Backend `5000` | `order-center` |
+| **Operations Dashboard** | Operations, Invoicing & User Categorization | Client `5174`, Server `3001` | `dashboard` |
+
+* **Zero Hard Coupling**: The ERP system operates completely autonomously with its own embedded relational database (`data/ordercenter.db`), self-contained static client (`public/index.html`), and independent session authentication.
+* **Independent Lifecycle**: Failures, updates, or maintenance in the customer-facing website or the operational dashboard have zero impact on the financial ledger and treasury operations.
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
