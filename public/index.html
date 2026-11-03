@@ -380,7 +380,15 @@
     // ==========================================
     // REST API CLIENT (CONNECTS TO NODE.JS & SQLITE)
     // ==========================================
-    const isNodeBackend = window.location.protocol.startsWith('http');
+    const isNodeBackend = window.location.protocol.startsWith('http') || window.location.protocol.startsWith('file');
+    const API_BASE = (() => {
+      if (typeof window === 'undefined') return '';
+      if (window.location.port === '3000') return '';
+      if (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000';
+      }
+      return '';
+    })();
     
     const api = {
       getToken: () => localStorage.getItem('ordercenter_token'),
@@ -391,6 +399,23 @@
         'Content-Type': 'application/json',
         ...(localStorage.getItem('ordercenter_token') ? { 'Authorization': `Bearer ${localStorage.getItem('ordercenter_token')}` } : {})
       }),
+
+      async safeJson(res, defaultError = 'Request failed') {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || data.message || `${defaultError} (HTTP ${res.status})`);
+          return data;
+        }
+        const text = await res.text();
+        if (res.status === 413 || text.includes('PayloadTooLargeError')) {
+          throw new Error('Backup payload is too large for the server.');
+        }
+        if (text.startsWith('<!DOCTYPE') || text.includes('<html')) {
+          throw new Error(`Server returned HTML error (HTTP ${res.status}). Ensure backend is active at http://localhost:3000.`);
+        }
+        throw new Error(text.slice(0, 150) || `${defaultError} (HTTP ${res.status})`);
+      },
 
       async login(username, password) {
         if (!isNodeBackend) {
@@ -713,7 +738,12 @@
       },
 
       async getBackup() {
-        if (!isNodeBackend) {
+        try {
+          const res = await fetch(`${API_BASE}/api/backup`, { headers: this.headers() });
+          const data = await this.safeJson(res, 'Failed to fetch backup from server');
+          return data.backup || data;
+        } catch (err) {
+          console.warn('[Backup] Backend fetch note, creating client snapshot:', err.message);
           return {
             version: '2.5.0',
             system: 'Order Center ERP',
@@ -727,33 +757,37 @@
             exchangeRate: Number(localStorage.getItem('ordercenter_usd_rate')) || 1500
           };
         }
-        const res = await fetch('/api/backup', { headers: this.headers() });
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || 'Failed to fetch backup');
-        }
-        const data = await res.json();
-        return data.backup;
       },
 
       async restoreBackup(backupData) {
-        if (!isNodeBackend) {
-          if (backupData.transactions) localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(backupData.transactions));
-          if (backupData.openingBalances) localStorage.setItem('ordercenter_opening_balances', JSON.stringify(backupData.openingBalances));
-          if (backupData.loans) localStorage.setItem('ordercenter_loans_v1', JSON.stringify(backupData.loans));
-          if (backupData.users) localStorage.setItem('ordercenter_users', JSON.stringify(backupData.users));
-          if (backupData.categories) localStorage.setItem('ordercenter_categories_v1', JSON.stringify(backupData.categories));
-          if (backupData.exchangeRate) localStorage.setItem('ordercenter_usd_rate', backupData.exchangeRate.toString());
-          return true;
+        let payload = backupData;
+        if (payload && payload.backup && typeof payload.backup === 'object') {
+          payload = payload.backup;
+        } else if (payload && payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+          payload = payload.data;
         }
-        const res = await fetch('/api/restore', {
-          method: 'POST',
-          headers: this.headers(),
-          body: JSON.stringify(backupData)
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || 'Failed to restore backup');
+
+        // Always update browser localStorage cache for instant resilience
+        if (payload.transactions) localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(payload.transactions));
+        if (payload.openingBalances) localStorage.setItem('ordercenter_opening_balances', JSON.stringify(payload.openingBalances));
+        if (payload.loans) localStorage.setItem('ordercenter_loans_v1', JSON.stringify(payload.loans));
+        if (payload.loanRepayments) localStorage.setItem('ordercenter_loan_repayments_v1', JSON.stringify(payload.loanRepayments));
+        if (payload.users) localStorage.setItem('ordercenter_users', JSON.stringify(payload.users));
+        if (payload.categories) localStorage.setItem('ordercenter_categories_v1', JSON.stringify(payload.categories));
+        if (payload.exchangeRate) localStorage.setItem('ordercenter_usd_rate', payload.exchangeRate.toString());
+
+        try {
+          const res = await fetch(`${API_BASE}/api/restore`, {
+            method: 'POST',
+            headers: this.headers(),
+            body: JSON.stringify(payload)
+          });
+          await this.safeJson(res, 'Failed to restore database');
+        } catch (netErr) {
+          console.warn('[Restore] Server sync note:', netErr.message);
+          if (netErr.message && !netErr.message.includes('fetch')) {
+            throw netErr;
+          }
         }
         return true;
       }
@@ -1624,19 +1658,19 @@
       const [transactions, setTransactions] = useState(() => {
         const saved = localStorage.getItem('ordercenter_erp_v1_txs');
         const defaultRate = Number(localStorage.getItem('ordercenter_usd_rate')) || 1500;
-        if (!saved) return INITIAL_SYSTEM_DATA.transactions;
+        if (saved === null) return INITIAL_SYSTEM_DATA.transactions;
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             return parsed.map(tx => ({
               ...tx,
               exchangeRate: tx.exchangeRate || defaultRate,
               amountIQD: tx.amountIQD !== undefined ? tx.amountIQD : (tx.currency === 'USD' ? (Number(tx.amount) * (tx.exchangeRate || defaultRate)) : Number(tx.amount))
             }));
           }
-          return INITIAL_SYSTEM_DATA.transactions;
+          return [];
         } catch (e) {
-          return INITIAL_SYSTEM_DATA.transactions;
+          return [];
         }
       });
 
@@ -1820,6 +1854,7 @@
       });
 
       const [equityRatio, setEquityRatio] = useState({ Sarwar: 50, Wazham: 50 });
+      const isSubmittingRef = React.useRef(false);
 
       // Loan Management State (with historical exchange rate locking)
       const [loans, setLoans] = useState(() => {
@@ -2303,6 +2338,7 @@
       // Action Handlers
       const handleSaveTransaction = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
         if (!txForm.amount || Number(txForm.amount) <= 0) return;
 
         if (txForm.type === 'withdrawal' && !txForm.partner) {
@@ -2333,52 +2369,58 @@
           }
         }
 
-        const newTx = {
-          id: editingTx ? editingTx.id : generateId('TX'),
-          refNumber: autoRef,
-          type: txForm.type,
-          amount: Number(txForm.amount),
-          currency: txForm.currency,
-          exchangeRate: lockedRate,
-          amountIQD: calcAmountIQD,
-          accountId: txForm.accountId,
-          toAccountId: txForm.type === 'transfer' ? txForm.toAccountId : null,
-          partner: txForm.partner || null,
-          category: txForm.category,
-          notes: txForm.notes.trim() || (lang === 'ku' ? 'هیچ تێبینییەک نەنووسراوە' : 'No memo provided.'),
-          date: txForm.date
-        };
+        isSubmittingRef.current = true;
+        try {
+          const newTx = {
+            id: editingTx ? editingTx.id : generateId('TX'),
+            refNumber: autoRef,
+            type: txForm.type,
+            amount: Number(txForm.amount),
+            currency: txForm.currency,
+            exchangeRate: lockedRate,
+            amountIQD: calcAmountIQD,
+            accountId: txForm.accountId,
+            toAccountId: txForm.type === 'transfer' ? txForm.toAccountId : null,
+            partner: txForm.partner || null,
+            category: txForm.category,
+            notes: txForm.notes.trim() || (lang === 'ku' ? 'هیچ تێبینییەک نەنووسراوە' : 'No memo provided.'),
+            date: txForm.date
+          };
 
-        if (editingTx) {
-          setTransactions((prev) => prev.map((t) => (t.id === editingTx.id ? newTx : t)));
-          if (typeof api !== 'undefined' && api.updateTransaction) {
-            try {
-              await api.updateTransaction(editingTx.id, newTx);
-            } catch (err) {
-              console.warn('[API] Could not update transaction on server:', err);
+          if (editingTx) {
+            setTransactions((prev) => prev.map((t) => (t.id === editingTx.id ? newTx : t)));
+            if (typeof api !== 'undefined' && api.updateTransaction) {
+              try {
+                await api.updateTransaction(editingTx.id, newTx);
+              } catch (err) {
+                console.warn('[API] Could not update transaction on server:', err);
+              }
             }
-          }
-          triggerToast(lang === 'ku' ? 'تۆمارەکە نوێکرایەوە' : 'Transaction updated!');
-        } else {
-          setTransactions((prev) => [newTx, ...prev]);
-          if (typeof api !== 'undefined' && api.createTransaction) {
-            try {
-              await api.createTransaction(newTx);
-            } catch (err) {
-              console.warn('[API] Could not save transaction to server:', err);
+            triggerToast(lang === 'ku' ? 'تۆمارەکە نوێکرایەوە' : 'Transaction updated!');
+          } else {
+            setTransactions((prev) => [newTx, ...prev]);
+            if (typeof api !== 'undefined' && api.createTransaction) {
+              try {
+                await api.createTransaction(newTx);
+              } catch (err) {
+                console.warn('[API] Could not save transaction to server:', err);
+              }
             }
+            triggerToast(
+              txForm.type === 'withdrawal'
+                ? (lang === 'ku' ? `ڕاکێشانی دارایی بۆ ${getPartnerName(newTx.partner)} تۆمارکرا` : `Drawing for ${newTx.partner} recorded!`)
+                : (lang === 'ku' ? 'جووڵەی دارایی نوێ تۆمارکرا' : 'Transaction logged!')
+            );
           }
-          triggerToast(
-            txForm.type === 'withdrawal'
-              ? (lang === 'ku' ? `ڕاکێشانی دارایی بۆ ${getPartnerName(newTx.partner)} تۆمارکرا` : `Drawing for ${newTx.partner} recorded!`)
-              : (lang === 'ku' ? 'جووڵەی دارایی نوێ تۆمارکرا' : 'Transaction logged!')
-          );
+          closeTxModal();
+        } finally {
+          isSubmittingRef.current = false;
         }
-        closeTxModal();
       };
 
       const handleSaveTransfer = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
         if (!transferForm.amount || Number(transferForm.amount) <= 0) return;
         if (transferForm.fromAccountId === transferForm.toAccountId) {
           triggerToast(lang === 'ku' ? 'هەژماری سەرچاوە و مەبەست دەبێت جیاواز بن' : 'Source and destination accounts must be different.');
@@ -2396,34 +2438,39 @@
           return;
         }
 
-        const newTx = {
-          id: generateId('TX'),
-          refNumber: `TR-${Math.floor(1000 + Math.random() * 9000)}`,
-          type: 'transfer',
-          amount: Number(transferForm.amount),
-          currency: transferForm.currency,
-          exchangeRate: transferRate,
-          amountIQD: calcTransferIQD,
-          accountId: transferForm.fromAccountId,
-          toAccountId: transferForm.toAccountId,
-          partner: transferForm.partner,
-          category: 'Internal Account Rebalance',
-          notes: transferForm.notes.trim() || (lang === 'ku' ? 'گواستنەوەی نێوان هەژمارەکان' : 'Internal liquidity transfer.'),
-          date: transferForm.date
-        };
+        isSubmittingRef.current = true;
+        try {
+          const newTx = {
+            id: generateId('TX'),
+            refNumber: `TR-${Math.floor(1000 + Math.random() * 9000)}`,
+            type: 'transfer',
+            amount: Number(transferForm.amount),
+            currency: transferForm.currency,
+            exchangeRate: transferRate,
+            amountIQD: calcTransferIQD,
+            accountId: transferForm.fromAccountId,
+            toAccountId: transferForm.toAccountId,
+            partner: transferForm.partner,
+            category: 'Internal Account Rebalance',
+            notes: transferForm.notes.trim() || (lang === 'ku' ? 'گواستنەوەی نێوان هەژمارەکان' : 'Internal liquidity transfer.'),
+            date: transferForm.date
+          };
 
-        setTransactions((prev) => [newTx, ...prev]);
-        if (typeof api !== 'undefined' && api.createTransaction) {
-          try {
-            await api.createTransaction(newTx);
-          } catch (err) {
-            console.warn('[API] Could not save transfer to server:', err);
+          setTransactions((prev) => [newTx, ...prev]);
+          if (typeof api !== 'undefined' && api.createTransaction) {
+            try {
+              await api.createTransaction(newTx);
+            } catch (err) {
+              console.warn('[API] Could not save transfer to server:', err);
+            }
           }
+          setIsTransferModalOpen(false);
+          triggerToast(lang === 'ku' 
+            ? `پارە گوازرایەوە لە ${ACCOUNTS[newTx.accountId].shortNameKu} بۆ ${ACCOUNTS[newTx.toAccountId].shortNameKu}` 
+            : `Transferred from ${ACCOUNTS[newTx.accountId].shortName} to ${ACCOUNTS[newTx.toAccountId].shortName}!`);
+        } finally {
+          isSubmittingRef.current = false;
         }
-        setIsTransferModalOpen(false);
-        triggerToast(lang === 'ku' 
-          ? `پارە گوازرایەوە لە ${ACCOUNTS[newTx.accountId].shortNameKu} بۆ ${ACCOUNTS[newTx.toAccountId].shortNameKu}` 
-          : `Transferred from ${ACCOUNTS[newTx.accountId].shortName} to ${ACCOUNTS[newTx.toAccountId].shortName}!`);
       };
 
       const openNewTxModal = (type = 'income', partner = '', category = null) => {
@@ -2477,6 +2524,7 @@
       // Loan Action Handlers
       const handleSaveLoan = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
         const amt = Number(loanForm.amount);
         if (!amt || amt <= 0) return;
         const person = (loanForm.personName || loanForm.partner || 'Sarwar').trim();
@@ -2523,116 +2571,122 @@
               ? (isPartnerDirect ? `کۆمپانیا قەرزی دا بە ${getPartnerName(person)} (${getPartnerName(person)} داوای قەرزی لە کۆمپانیا کرد)` : `کۆمپانیا قەرزی دا بە (${person}) لە ڕێگەی ${getPartnerName(loanForm.partner)}`)
               : (isPartnerDirect ? `Company gave loan to ${person} (${person} asked for loan from company)` : `Company gave loan to ${person} via ${loanForm.partner}`));
 
-        if (editingLoan) {
-          const diff = amt - editingLoan.amount;
-          const newRemaining = Math.max(0, editingLoan.remainingAmount + diff);
+        isSubmittingRef.current = true;
+        try {
+          if (editingLoan) {
+            const diff = amt - editingLoan.amount;
+            const newRemaining = Math.max(0, editingLoan.remainingAmount + diff);
 
-          const updatedLoan = {
-            ...editingLoan,
+            const updatedLoan = {
+              ...editingLoan,
+              direction: loanForm.direction,
+              partner: loanForm.partner,
+              personName: person,
+              amount: amt,
+              currency: loanForm.currency,
+              accountId: loanForm.accountId,
+              remainingAmount: newRemaining,
+              status: newRemaining === 0 ? 'paid' : 'active',
+              date: loanForm.date,
+              notes: loanForm.notes.trim() || defaultMemo
+            };
+
+            setLoans(prev => prev.map(l => (l.id === editingLoan.id ? updatedLoan : l)));
+            if (typeof api !== 'undefined' && api.updateLoan) {
+              try { await api.updateLoan(editingLoan.id, updatedLoan); } catch (e) {}
+            }
+
+            if (editingLoan.txId) {
+              setTransactions(prev => prev.map(tx => {
+                if (tx.id === editingLoan.txId) {
+                  const updatedTx = {
+                    ...tx,
+                    type: txType,
+                    amount: amt,
+                    currency: loanForm.currency,
+                    accountId: loanForm.accountId,
+                    partner: loanForm.partner,
+                    category: txCategory,
+                    notes: loanForm.notes.trim() || defaultMemo,
+                    date: loanForm.date
+                  };
+                  if (typeof api !== 'undefined' && api.updateTransaction) {
+                    api.updateTransaction(tx.id, updatedTx).catch(() => {});
+                  }
+                  return updatedTx;
+                }
+                return tx;
+              }));
+            }
+
+            setEditingLoan(null);
+            setIsLoanModalOpen(false);
+            triggerToast(lang === 'ku' ? 'تۆماری قەرزەکە بە سەرکەوتوویی نوێکرایەوە' : 'Loan record updated successfully!');
+            return;
+          }
+
+          const loanId = generateId('LN');
+          const invoiceNum = generateNextInvoiceNumber(transactions);
+
+          const newTx = {
+            id: generateId('TX'),
+            refNumber: invoiceNum,
+            type: txType,
+            amount: amt,
+            currency: loanForm.currency,
+            exchangeRate: lockedRate,
+            amountIQD: loanForm.currency === 'USD' ? amt * lockedRate : amt,
+            accountId: loanForm.accountId,
+            toAccountId: null,
+            partner: loanForm.partner,
+            category: txCategory,
+            notes: loanForm.notes.trim() || defaultMemo,
+            date: loanForm.date
+          };
+
+          const newLoan = {
+            id: loanId,
             direction: loanForm.direction,
             partner: loanForm.partner,
             personName: person,
             amount: amt,
             currency: loanForm.currency,
+            exchangeRate: lockedRate,
             accountId: loanForm.accountId,
-            remainingAmount: newRemaining,
-            status: newRemaining === 0 ? 'paid' : 'active',
+            remainingAmount: amt,
+            status: 'active',
             date: loanForm.date,
-            notes: loanForm.notes.trim() || defaultMemo
+            notes: loanForm.notes.trim() || defaultMemo,
+            txId: newTx.id,
+            allowAdditional: true
           };
 
-          setLoans(prev => prev.map(l => (l.id === editingLoan.id ? updatedLoan : l)));
-          if (typeof api !== 'undefined' && api.updateLoan) {
-            try { await api.updateLoan(editingLoan.id, updatedLoan); } catch (e) {}
+          setLoans(prev => [newLoan, ...prev]);
+          setTransactions(prev => [newTx, ...prev]);
+          if (typeof api !== 'undefined') {
+            // Await sequentially to eliminate race conditions
+            if (api.createLoan) await api.createLoan(newLoan).catch(err => console.warn('[API] createLoan error:', err));
+            if (api.createTransaction) await api.createTransaction(newTx).catch(err => console.warn('[API] createTransaction error:', err));
           }
-
-          if (editingLoan.txId) {
-            setTransactions(prev => prev.map(tx => {
-              if (tx.id === editingLoan.txId) {
-                const updatedTx = {
-                  ...tx,
-                  type: txType,
-                  amount: amt,
-                  currency: loanForm.currency,
-                  accountId: loanForm.accountId,
-                  partner: loanForm.partner,
-                  category: txCategory,
-                  notes: loanForm.notes.trim() || defaultMemo,
-                  date: loanForm.date
-                };
-                if (typeof api !== 'undefined' && api.updateTransaction) {
-                  api.updateTransaction(tx.id, updatedTx).catch(() => {});
-                }
-                return updatedTx;
-              }
-              return tx;
-            }));
-          }
-
-          setEditingLoan(null);
           setIsLoanModalOpen(false);
-          triggerToast(lang === 'ku' ? 'تۆماری قەرزەکە بە سەرکەوتوویی نوێکرایەوە' : 'Loan record updated successfully!');
-          return;
+
+          const accName = ACCOUNTS[loanForm.accountId]?.shortNameKu || ACCOUNTS[loanForm.accountId]?.shortName || loanForm.accountId;
+          const partyLabel = isPartnerDirect ? getPartnerName(person) : person;
+          triggerToast(lang === 'ku' 
+            ? (isBorrowed 
+                ? `قەرزەکە تۆمارکرا: کۆمپانیا قەرزی لە ${partyLabel} وەرگرت (+ باڵانس لە ${accName} زیادکرا)` 
+                : `قەرزەکە تۆمارکرا: کۆمپانیا قەرزی دا بە ${partyLabel} (- باڵانس لە ${accName} کەمکرا)`)
+            : (isBorrowed 
+                ? `Loan recorded: Company took loan from ${partyLabel} (+ Balance added to ${accName})` 
+                : `Loan recorded: Company gave loan to ${partyLabel} (- Balance deducted from ${accName})`));
+        } finally {
+          isSubmittingRef.current = false;
         }
-
-        const loanId = generateId('LN');
-        const invoiceNum = generateNextInvoiceNumber(transactions);
-
-        const newTx = {
-          id: generateId('TX'),
-          refNumber: invoiceNum,
-          type: txType,
-          amount: amt,
-          currency: loanForm.currency,
-          exchangeRate: lockedRate,
-          amountIQD: loanForm.currency === 'USD' ? amt * lockedRate : amt,
-          accountId: loanForm.accountId,
-          toAccountId: null,
-          partner: loanForm.partner,
-          category: txCategory,
-          notes: loanForm.notes.trim() || defaultMemo,
-          date: loanForm.date
-        };
-
-        const newLoan = {
-          id: loanId,
-          direction: loanForm.direction,
-          partner: loanForm.partner,
-          personName: person,
-          amount: amt,
-          currency: loanForm.currency,
-          exchangeRate: lockedRate,
-          accountId: loanForm.accountId,
-          remainingAmount: amt,
-          status: 'active',
-          date: loanForm.date,
-          notes: loanForm.notes.trim() || defaultMemo,
-          txId: newTx.id,
-          allowAdditional: true
-        };
-
-        setLoans(prev => [newLoan, ...prev]);
-        setTransactions(prev => [newTx, ...prev]);
-        if (typeof api !== 'undefined') {
-          // Fix E-C4: Ensure both loan debt liability and cash transaction are booked without failure
-          if (api.createLoan) api.createLoan(newLoan).catch(err => console.warn('[API] createLoan error:', err));
-          if (api.createTransaction) api.createTransaction(newTx).catch(err => console.warn('[API] createTransaction error:', err));
-        }
-        setIsLoanModalOpen(false);
-
-        const accName = ACCOUNTS[loanForm.accountId]?.shortNameKu || ACCOUNTS[loanForm.accountId]?.shortName || loanForm.accountId;
-        const partyLabel = isPartnerDirect ? getPartnerName(person) : person;
-        triggerToast(lang === 'ku' 
-          ? (isBorrowed 
-              ? `قەرزەکە تۆمارکرا: کۆمپانیا قەرزی لە ${partyLabel} وەرگرت (+ باڵانس لە ${accName} زیادکرا)` 
-              : `قەرزەکە تۆمارکرا: کۆمپانیا قەرزی دا بە ${partyLabel} (- باڵانس لە ${accName} کەمکرا)`)
-          : (isBorrowed 
-              ? `Loan recorded: Company took loan from ${partyLabel} (+ Balance added to ${accName})` 
-              : `Loan recorded: Company gave loan to ${partyLabel} (- Balance deducted from ${accName})`));
       };
 
       const handleRepayLoan = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
         if (!repayingLoan) return;
         const repayAmt = Number(repayForm.amount);
         if (!repayAmt || repayAmt <= 0) {
@@ -2644,78 +2698,92 @@
           return;
         }
 
-        const invoiceNum = generateNextInvoiceNumber(transactions);
-        const isBorrowed = repayingLoan.direction === 'borrowed';
-        const lockedRate = repayingLoan.exchangeRate || exchangeRate;
-        const newRemaining = Math.max(0, repayingLoan.remainingAmount - repayAmt);
-        const isFullPayoff = newRemaining === 0;
+        isSubmittingRef.current = true;
+        try {
+          const invoiceNum = generateNextInvoiceNumber(transactions);
+          const isBorrowed = repayingLoan.direction === 'borrowed';
+          const lockedRate = repayingLoan.exchangeRate || exchangeRate;
+          const newRemaining = Math.max(0, repayingLoan.remainingAmount - repayAmt);
+          const isFullPayoff = newRemaining === 0;
 
-        const txType = isBorrowed ? 'expense' : 'income';
-        const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Company Loan Repayment';
-        const defaultMemo = isBorrowed
-          ? (isFullPayoff
-              ? (lang === 'ku' ? `دانەوەی تەواوەتی قەرزی (${repayingLoan.personName}) لە ڕێگەی ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Full settlement of loan borrowed from ${repayingLoan.personName} via ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
-              : (lang === 'ku' ? `دانەوەی بەشەکی (${repayAmt.toLocaleString()}) لە قەرزی (${repayingLoan.personName}) - ماوە: ${newRemaining.toLocaleString()}` : `Partial loan repayment to ${repayingLoan.personName} (${repayAmt.toLocaleString()}) • Remaining: ${newRemaining.toLocaleString()}`))
-          : (isFullPayoff
-              ? (lang === 'ku' ? `وەرگرتنەوەی تەواوەتی قەرزی دراو بە (${repayingLoan.personName}) بۆ ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Full collection of loan given to ${repayingLoan.personName} into ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
-              : (lang === 'ku' ? `وەرگرتنەوەی بەشەکی (${repayAmt.toLocaleString()}) لە قەرزی (${repayingLoan.personName}) - ماوە: ${newRemaining.toLocaleString()}` : `Partial loan collection from ${repayingLoan.personName} (${repayAmt.toLocaleString()}) • Remaining: ${newRemaining.toLocaleString()}`));
+          const txType = isBorrowed ? 'expense' : 'income';
+          const txCategory = isBorrowed ? 'Partner Loan Repayment' : 'Company Loan Repayment';
+          const defaultMemo = isBorrowed
+            ? (isFullPayoff
+                ? (lang === 'ku' ? `دانەوەی تەواوەتی قەرزی (${repayingLoan.personName}) لە ڕێگەی ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Full settlement of loan borrowed from ${repayingLoan.personName} via ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
+                : (lang === 'ku' ? `دانەوەی بەشەکی (${repayAmt.toLocaleString()}) لە قەرزی (${repayingLoan.personName}) - ماوە: ${newRemaining.toLocaleString()}` : `Partial loan repayment to ${repayingLoan.personName} (${repayAmt.toLocaleString()}) • Remaining: ${newRemaining.toLocaleString()}`))
+            : (isFullPayoff
+                ? (lang === 'ku' ? `وەرگرتنەوەی تەواوەتی قەرزی دراو بە (${repayingLoan.personName}) بۆ ${ACCOUNTS[repayForm.accountId]?.shortNameKu || repayForm.accountId}` : `Full collection of loan given to ${repayingLoan.personName} into ${ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId}`)
+                : (lang === 'ku' ? `وەرگرتنەوەی بەشەکی (${repayAmt.toLocaleString()}) لە قەرزی (${repayingLoan.personName}) - ماوە: ${newRemaining.toLocaleString()}` : `Partial loan collection from ${repayingLoan.personName} (${repayAmt.toLocaleString()}) • Remaining: ${newRemaining.toLocaleString()}`));
 
-        const newTx = {
-          id: generateId('TX'),
-          refNumber: invoiceNum,
-          type: txType,
-          amount: repayAmt,
-          currency: repayingLoan.currency,
-          exchangeRate: lockedRate,
-          amountIQD: repayingLoan.currency === 'USD' ? repayAmt * lockedRate : repayAmt,
-          accountId: repayForm.accountId,
-          toAccountId: null,
-          partner: repayingLoan.partner,
-          category: txCategory,
-          notes: repayForm.notes.trim() || defaultMemo,
-          date: repayForm.date
-        };
+          const newTx = {
+            id: generateId('TX'),
+            refNumber: invoiceNum,
+            type: txType,
+            amount: repayAmt,
+            currency: repayingLoan.currency,
+            exchangeRate: lockedRate,
+            amountIQD: repayingLoan.currency === 'USD' ? repayAmt * lockedRate : repayAmt,
+            accountId: repayForm.accountId,
+            toAccountId: null,
+            partner: repayingLoan.partner,
+            category: txCategory,
+            notes: repayForm.notes.trim() || defaultMemo,
+            date: repayForm.date
+          };
 
-        const newRepayment = {
-          id: generateId('REP'),
-          loanId: repayingLoan.id,
-          personName: repayingLoan.personName,
-          partner: repayingLoan.partner,
-          amount: repayAmt,
-          currency: repayingLoan.currency,
-          exchangeRate: lockedRate,
-          amountIQD: repayingLoan.currency === 'USD' ? repayAmt * lockedRate : repayAmt,
-          accountId: repayForm.accountId,
-          date: repayForm.date,
-          notes: repayForm.notes.trim() || defaultMemo,
-          txId: newTx.id,
-          createdAt: new Date().toISOString()
-        };
+          const newRepayment = {
+            id: generateId('REP'),
+            loanId: repayingLoan.id,
+            personName: repayingLoan.personName,
+            partner: repayingLoan.partner,
+            amount: repayAmt,
+            currency: repayingLoan.currency,
+            exchangeRate: lockedRate,
+            amountIQD: repayingLoan.currency === 'USD' ? repayAmt * lockedRate : repayAmt,
+            accountId: repayForm.accountId,
+            date: repayForm.date,
+            notes: repayForm.notes.trim() || defaultMemo,
+            txId: newTx.id,
+            createdAt: new Date().toISOString()
+          };
 
-        const newStatus = isFullPayoff ? 'paid' : 'active';
-        setLoans(prev => prev.map(l => {
-          if (l.id === repayingLoan.id) {
-            return {
-              ...l,
-              remainingAmount: newRemaining,
-              status: newStatus
-            };
+          const newStatus = isFullPayoff ? 'paid' : 'active';
+          setLoans(prev => prev.map(l => {
+            if (l.id === repayingLoan.id) {
+              return {
+                ...l,
+                remainingAmount: newRemaining,
+                status: newStatus
+              };
+            }
+            return l;
+          }));
+
+          setTransactions(prev => [newTx, ...prev]);
+          setLoanRepayments(prev => [newRepayment, ...prev]);
+
+          if (typeof api !== 'undefined') {
+            if (api.updateLoan) await api.updateLoan(repayingLoan.id, { remainingAmount: newRemaining, status: newStatus }).catch(() => {});
+            if (api.createLoanRepayment) await api.createLoanRepayment(newRepayment).catch(() => {});
+            if (api.createTransaction) await api.createTransaction(newTx).catch(() => {});
           }
-          return l;
-        }));
+          setRepayingLoan(null);
 
-        setTransactions(prev => [newTx, ...prev]);
-        setLoanRepayments(prev => [newRepayment, ...prev]);
-
-        if (typeof api !== 'undefined') {
-          if (api.updateLoan) api.updateLoan(repayingLoan.id, { remainingAmount: newRemaining, status: newStatus }).catch(() => {});
-          if (api.createTransaction) api.createTransaction(newTx).catch(() => {});
-          if (api.createLoanRepayment) api.createLoanRepayment(newRepayment).catch(() => {});
+          const accName = ACCOUNTS[repayForm.accountId]?.shortNameKu || ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId;
+          if (isFullPayoff) {
+            triggerToast(lang === 'ku'
+              ? `🎉 قەرزەکە بە تەواوی دانراوە (${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))}) لە ${accName}`
+              : `🎉 Loan fully settled! Payment of ${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))} completed in ${accName}.`);
+          } else {
+            triggerToast(lang === 'ku'
+              ? `✅ پارەدانی بەشەکی بە سەرکەوتوویی تۆمارکرا (${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))}). بڕی ماوە: ${formatIQD(toIQD({ ...repayingLoan, amount: newRemaining }))}`
+              : `✅ Partial repayment of ${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))} processed! Remaining debt: ${formatIQD(toIQD({ ...repayingLoan, amount: newRemaining }))}.`);
+          }
+        } finally {
+          isSubmittingRef.current = false;
         }
-        setRepayingLoan(null);
-
-        const accName = ACCOUNTS[repayForm.accountId]?.shortNameKu || ACCOUNTS[repayForm.accountId]?.shortName || repayForm.accountId;
-        if (isFullPayoff) {
+      };
           triggerToast(lang === 'ku'
             ? `🎉 قەرزەکە بە تەواوی دانراوە (${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))}) لە ${accName}`
             : `🎉 Loan fully settled! Payment of ${formatIQD(toIQD({ ...repayingLoan, amount: repayAmt }))} completed in ${accName}.`);
@@ -2927,14 +2995,28 @@
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
-            const parsed = JSON.parse(event.target.result);
-            if (!parsed || (!parsed.transactions && !parsed.openingBalances && !parsed.loans)) {
+            let parsed = JSON.parse(event.target.result);
+            if (parsed && parsed.backup && typeof parsed.backup === 'object') {
+              parsed = parsed.backup;
+            } else if (parsed && parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+              parsed = parsed.data;
+            }
+            if (!parsed || (typeof parsed !== 'object')) {
+              triggerToast('Invalid backup file. Missing ERP data structure.');
+              return;
+            }
+            const hasData = Array.isArray(parsed.transactions) || 
+                            (parsed.openingBalances && typeof parsed.openingBalances === 'object') || 
+                            Array.isArray(parsed.loans) || 
+                            Array.isArray(parsed.loanRepayments) ||
+                            Array.isArray(parsed.users);
+            if (!hasData) {
               triggerToast('Invalid backup file. Missing ERP data structure.');
               return;
             }
             setRestoreModalData(parsed);
           } catch (err) {
-            triggerToast('Failed to parse backup JSON file.');
+            triggerToast('Failed to parse backup JSON file: ' + err.message);
           }
         };
         reader.readAsText(file);
@@ -2956,6 +3038,22 @@
           if (restoreModalData.exchangeRate) {
             setExchangeRate(Number(restoreModalData.exchangeRate));
             localStorage.setItem('ordercenter_usd_rate', restoreModalData.exchangeRate.toString());
+          }
+          if (restoreModalData.openingBalances) {
+            setOpeningBalances(restoreModalData.openingBalances);
+            localStorage.setItem('ordercenter_opening_balances', JSON.stringify(restoreModalData.openingBalances));
+          }
+          if (restoreModalData.transactions) {
+            setTransactions(restoreModalData.transactions);
+            localStorage.setItem('ordercenter_erp_v1_txs', JSON.stringify(restoreModalData.transactions));
+          }
+          if (restoreModalData.loans) {
+            setLoans(restoreModalData.loans);
+            localStorage.setItem('ordercenter_loans_v1', JSON.stringify(restoreModalData.loans));
+          }
+          if (restoreModalData.loanRepayments) {
+            setLoanRepayments(restoreModalData.loanRepayments);
+            localStorage.setItem('ordercenter_loan_repayments_v1', JSON.stringify(restoreModalData.loanRepayments));
           }
           await loadServerData();
           setIsRestoring(false);

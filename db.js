@@ -157,7 +157,7 @@ module.exports = {
   // User Management
   getUserByUsername: (identifier) => {
     const clean = (identifier || '').trim().toLowerCase();
-    return db.prepare('SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(name) = ?').get(clean, clean);
+    return db.prepare('SELECT * FROM users WHERE LOWER(username) = ?').get(clean);
   },
 
   getUserById: (id) => {
@@ -172,7 +172,7 @@ module.exports = {
   },
 
   createUser: ({ name, username, password, role, partner }) => {
-    const id = 'usr_' + Date.now();
+    const id = generateSecureId('usr');
     const createdAt = new Date().toISOString().split('T')[0];
     const passwordHash = hashPassword(password);
     const assignedRole = (role === 'admin') ? 'admin' : 'user';
@@ -211,12 +211,20 @@ module.exports = {
 
   getSessionUser: (token) => {
     if (!token) return null;
+    const session = db.prepare('SELECT user_id, created_at FROM sessions WHERE token = ?').get(token);
+    if (!session) return null;
+    // Expire sessions after 30 days
+    const sessionAge = Date.now() - new Date(session.created_at).getTime();
+    const maxAge = 30 * 24 * 60 * 60 * 1000;
+    if (sessionAge > maxAge) {
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      return null;
+    }
     return db.prepare(`
       SELECT u.id, u.name, u.username, u.role, u.partner, u.active 
-      FROM sessions s 
-      JOIN users u ON s.user_id = u.id 
-      WHERE s.token = ? AND u.active = 1
-    `).get(token);
+      FROM users u 
+      WHERE u.id = ? AND u.active = 1
+    `).get(session.user_id);
   },
 
   deleteSession: (token) => {
@@ -276,9 +284,9 @@ module.exports = {
       createdBy || 'Wazham'
     );
 
-    // E-C4 Fix: If transaction is a Company Loan (Taken), ensure corresponding debt is booked in loans table
-    const catLower = (tx.category || '').toLowerCase();
-    if (catLower.includes('company loan (taken)') || (tx.type === 'income' && catLower.includes('loan'))) {
+    // Only auto-book a borrowed debt if explicitly 'Company Loan (Taken)' and NOT a repayment or already booked
+    const catLower = (tx.category || '').toLowerCase().trim();
+    if (catLower === 'company loan (taken)' && tx.type === 'income' && !catLower.includes('repay')) {
       const existingLoan = db.prepare('SELECT id FROM loans WHERE tx_id = ?').get(id);
       if (!existingLoan) {
         const loanId = generateSecureId('LN');
@@ -362,7 +370,31 @@ module.exports = {
   },
 
   createLoan: (loan) => {
-    // Fix E-C3: Never use clashing 5-digit clock slice; generate collision-proof ID
+    // Check if a loan linked to this transaction already exists to prevent duplication
+    const txId = loan.txId || loan.tx_id || null;
+    if (txId) {
+      const existing = db.prepare('SELECT * FROM loans WHERE tx_id = ?').get(txId);
+      if (existing) {
+        return {
+          id: existing.id,
+          direction: existing.direction,
+          partner: existing.partner,
+          personName: existing.person_name,
+          amount: existing.amount,
+          currency: existing.currency,
+          exchangeRate: existing.exchange_rate,
+          accountId: existing.account_id,
+          remainingAmount: existing.remaining_amount,
+          status: existing.status,
+          date: existing.date,
+          notes: existing.notes,
+          txId: existing.tx_id,
+          createdAt: existing.created_at
+        };
+      }
+    }
+
+    // Never use clashing IDs; generate collision-proof ID
     let id = loan.id;
     if (!id || id.length < 10 || db.prepare('SELECT id FROM loans WHERE id = ?').get(id)) {
       id = generateSecureId('LN');
@@ -372,14 +404,14 @@ module.exports = {
     const currency = loan.currency || 'IQD';
     const rem = Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount) || 0;
     const st = loan.status || (rem === 0 ? 'paid' : 'active');
+    const direction = (loan.direction === 'given') ? 'given' : 'borrowed';
 
-    // Fix E-C3: Use INSERT INTO instead of INSERT OR REPLACE to prevent clashing loans from silently replacing another loan
     db.prepare(`
       INSERT INTO loans (id, direction, partner, person_name, amount, currency, exchange_rate, account_id, remaining_amount, status, date, notes, tx_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      loan.direction || 'borrowed',
+      direction,
       loan.partner || 'Staff',
       (loan.personName || loan.person_name || '').trim(),
       Number(loan.amount) || 0,
@@ -390,10 +422,10 @@ module.exports = {
       st,
       loan.date || new Date().toISOString(),
       loan.notes || '',
-      loan.txId || loan.tx_id || null,
+      txId,
       createdAt
     );
-    return { ...loan, id, currency, exchangeRate: rate, remainingAmount: rem, status: st, createdAt };
+    return { ...loan, id, direction, currency, exchangeRate: rate, remainingAmount: rem, status: st, createdAt };
   },
 
   updateLoan: (id, updates) => {
@@ -497,7 +529,22 @@ module.exports = {
   },
 
   deleteLoanRepayment: (id) => {
-    db.prepare('DELETE FROM loan_repayments WHERE id = ?').run(id);
+    const rep = db.prepare('SELECT * FROM loan_repayments WHERE id = ?').get(id);
+    if (rep) {
+      // 1. Recalculate parent loan's remaining_amount and status
+      const loan = db.prepare('SELECT * FROM loans WHERE id = ?').get(rep.loan_id);
+      if (loan) {
+        const newRemaining = Math.min(Number(loan.amount), Number(loan.remaining_amount) + Number(rep.amount));
+        const newStatus = newRemaining > 0 ? 'active' : 'paid';
+        db.prepare('UPDATE loans SET remaining_amount = ?, status = ? WHERE id = ?').run(newRemaining, newStatus, loan.id);
+      }
+      // 2. Remove associated repayment transaction if linked
+      if (rep.tx_id) {
+        db.prepare('DELETE FROM transactions WHERE id = ?').run(rep.tx_id);
+      }
+      // 3. Remove repayment record
+      db.prepare('DELETE FROM loan_repayments WHERE id = ?').run(id);
+    }
     return true;
   },
 
@@ -518,8 +565,17 @@ module.exports = {
     const updateStmt = db.prepare('INSERT OR REPLACE INTO opening_balances (account_id, amount, updated_at) VALUES (?, ?, ?)');
     const now = new Date().toISOString();
     const accounts = ['fib', 'cihan', 'qi', 'hyperpost', 'cash'];
+    let norm = balances || {};
+    if (Array.isArray(balances)) {
+      norm = {};
+      balances.forEach(b => {
+        const id = (b.accountId || b.account_id || b.account || '').toLowerCase();
+        if (id) norm[id] = Number(b.amount || 0);
+      });
+    }
     accounts.forEach(acc => {
-      updateStmt.run(acc, Number(balances[acc] || 0), now);
+      const val = norm && norm[acc] !== undefined ? Number(norm[acc]) : 0;
+      updateStmt.run(acc, val, now);
     });
     return balances;
   },
@@ -546,6 +602,11 @@ module.exports = {
     const loanRepayments = module.exports.getAllLoanRepayments();
     const users = db.prepare('SELECT id, name, username, role, partner, active, created_at FROM users').all();
     const exchangeRate = module.exports.getExchangeRate();
+    const categoriesRow = db.prepare("SELECT value FROM system_settings WHERE key = 'categories'").get();
+    let categories = null;
+    if (categoriesRow) {
+      try { categories = JSON.parse(categoriesRow.value); } catch (_) {}
+    }
     
     return {
       version: '2.5.0',
@@ -556,21 +617,32 @@ module.exports = {
       openingBalances,
       loans,
       loanRepayments,
-      users
+      users,
+      categories
     };
   },
 
-  // Fix E-C6: Robust atomic restore with pre-validation, safety snapshot, and transaction rollback
+  // Robust atomic restore with pre-validation, safety snapshot, envelope unwrapping, and transaction rollback
   restoreBackup: (data) => {
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data payload.');
 
+    // Auto-unwrap envelope if backup is nested in { backup: ... } or { data: ... }
+    if (data.backup && typeof data.backup === 'object') {
+      data = data.backup;
+    } else if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+      data = data.data;
+    }
+
     // Pre-validation to prevent wiping the ledger with corrupt or empty backup files
-    const hasTxs = Array.isArray(data.transactions) && data.transactions.length > 0;
+    const hasTxs = Array.isArray(data.transactions);
     const hasBalances = data.openingBalances && typeof data.openingBalances === 'object';
     const hasLoans = Array.isArray(data.loans);
+    const loanReps = data.loanRepayments || data.loan_repayments;
+    const hasLoanReps = Array.isArray(loanReps);
+    const hasUsers = Array.isArray(data.users);
 
-    if (!hasTxs && !hasBalances && !hasLoans) {
-      throw new Error('Backup payload contains no valid ERP records (transactions, balances, or loans). Restore aborted to protect existing data.');
+    if (!hasTxs && !hasBalances && !hasLoans && !hasLoanReps && !hasUsers) {
+      throw new Error('Backup payload contains no recognized ERP records (transactions, balances, or loans). Restore aborted to protect existing data.');
     }
 
     // Safety Snapshot: Always write pre-restore safety copy to disk before making any changes
@@ -595,7 +667,7 @@ module.exports = {
         module.exports.setOpeningBalances(data.openingBalances);
       }
 
-      // 2. Restore transactions (only if valid non-empty array provided)
+      // 2. Restore transactions (supporting both camelCase and snake_case properties)
       if (hasTxs) {
         db.prepare('DELETE FROM transactions').run();
         const insertTx = db.prepare(`
@@ -603,14 +675,14 @@ module.exports = {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         data.transactions.forEach(tx => {
-          const rate = Number(tx.exchangeRate) || 1500;
+          const rate = Number(tx.exchangeRate !== undefined ? tx.exchangeRate : tx.exchange_rate) || 1500;
           const curr = tx.currency || 'IQD';
-          const amtIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (curr === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount));
+          const amtIQD = tx.amountIQD !== undefined ? Number(tx.amountIQD) : (tx.amount_iqd !== undefined ? Number(tx.amount_iqd) : (curr === 'USD' ? (Number(tx.amount) * rate) : Number(tx.amount)));
           insertTx.run(
             tx.id || generateSecureId('TX'),
-            tx.type,
-            tx.accountId,
-            tx.toAccountId || null,
+            tx.type || 'income',
+            tx.accountId || tx.account_id || 'fib',
+            tx.toAccountId || tx.to_account_id || null,
             Number(tx.amount) || 0,
             curr,
             rate,
@@ -618,10 +690,10 @@ module.exports = {
             tx.category || 'General Operations',
             tx.partner || 'Staff',
             tx.notes || '',
-            tx.refNumber || '',
+            tx.refNumber || tx.ref_number || '',
             tx.date || new Date().toISOString(),
-            tx.createdAt || new Date().toISOString(),
-            tx.createdBy || 'Wazham'
+            tx.createdAt || tx.created_at || new Date().toISOString(),
+            tx.createdBy || tx.created_by || 'Wazham'
           );
         });
       }
@@ -641,29 +713,29 @@ module.exports = {
             loan.personName || loan.person_name || '',
             Number(loan.amount) || 0,
             loan.currency || 'IQD',
-            Number(loan.exchangeRate) || 1500,
+            Number(loan.exchangeRate !== undefined ? loan.exchangeRate : loan.exchange_rate) || 1500,
             loan.accountId || loan.account_id || 'fib',
-            Number(loan.remainingAmount !== undefined ? loan.remainingAmount : loan.amount) || 0,
+            Number(loan.remainingAmount !== undefined ? loan.remainingAmount : (loan.remaining_amount !== undefined ? loan.remaining_amount : loan.amount)) || 0,
             loan.status || 'active',
             loan.date || new Date().toISOString(),
             loan.notes || '',
             loan.txId || loan.tx_id || null,
-            loan.createdAt || new Date().toISOString()
+            loan.createdAt || loan.created_at || new Date().toISOString()
           );
         });
       }
 
       // 4. Restore loan repayments safely
-      if (Array.isArray(data.loanRepayments)) {
+      if (hasLoanReps) {
         db.prepare('DELETE FROM loan_repayments').run();
         const insertRep = db.prepare(`
           INSERT INTO loan_repayments (id, loan_id, person_name, partner, amount, currency, exchange_rate, amount_iqd, account_id, date, notes, tx_id, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        data.loanRepayments.forEach(rep => {
-          const rate = Number(rep.exchangeRate) || 1500;
+        loanReps.forEach(rep => {
+          const rate = Number(rep.exchangeRate !== undefined ? rep.exchangeRate : rep.exchange_rate) || 1500;
           const curr = rep.currency || 'IQD';
-          const amtIQD = rep.amountIQD !== undefined ? Number(rep.amountIQD) : (curr === 'USD' ? (Number(rep.amount) * rate) : Number(rep.amount));
+          const amtIQD = rep.amountIQD !== undefined ? Number(rep.amountIQD) : (rep.amount_iqd !== undefined ? Number(rep.amount_iqd) : (curr === 'USD' ? (Number(rep.amount) * rate) : Number(rep.amount)));
           insertRep.run(
             rep.id || generateSecureId('REP'),
             rep.loanId || rep.loan_id,
@@ -677,14 +749,59 @@ module.exports = {
             rep.date || new Date().toISOString(),
             rep.notes || '',
             rep.txId || rep.tx_id || null,
-            rep.createdAt || new Date().toISOString()
+            rep.createdAt || rep.created_at || new Date().toISOString()
           );
         });
       }
 
       // 5. Restore exchange rate if provided
-      if (data.exchangeRate) {
-        module.exports.setExchangeRate(data.exchangeRate);
+      if (data.exchangeRate || data.exchange_rate) {
+        module.exports.setExchangeRate(data.exchangeRate || data.exchange_rate);
+      }
+
+      // 6. Restore custom categories in system settings if provided
+      if (data.categories) {
+        const catStr = typeof data.categories === 'string' ? data.categories : JSON.stringify(data.categories);
+        db.prepare("INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('categories', ?, ?)").run(catStr, new Date().toISOString());
+      }
+
+      // 7. Safely restore users from backup without overwriting active admin credentials
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        const defaultHash = hashPassword('user123');
+        const updateUserStmt = db.prepare(`
+          UPDATE users 
+          SET name = ?, role = ?, partner = ?, active = ? 
+          WHERE LOWER(username) = ?
+        `);
+        const insertUserStmt = db.prepare(`
+          INSERT INTO users (id, name, username, password_hash, role, partner, active, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        data.users.forEach(u => {
+          const uname = (u.username || '').trim().toLowerCase();
+          if (!uname) return;
+          const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = ?').get(uname);
+          if (existing) {
+            updateUserStmt.run(
+              u.name || uname,
+              u.role || 'user',
+              u.partner || 'Staff',
+              u.active !== undefined ? (u.active ? 1 : 0) : 1,
+              uname
+            );
+          } else {
+            insertUserStmt.run(
+              u.id || generateSecureId('usr'),
+              u.name || uname,
+              uname,
+              u.password_hash || defaultHash,
+              u.role || 'user',
+              u.partner || 'Staff',
+              u.active !== undefined ? (u.active ? 1 : 0) : 1,
+              u.created_at || u.createdAt || new Date().toISOString().split('T')[0]
+            );
+          }
+        });
       }
 
       db.exec('COMMIT');

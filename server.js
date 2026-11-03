@@ -8,7 +8,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Authentication Middleware
@@ -411,32 +412,12 @@ app.delete('/api/loan-repayments/:id', authMiddleware, (req, res) => {
 // BACKUP & RESTORE ROUTES (ADMIN ONLY)
 // ==========================================
 
-// Create & Download Full Backup JSON Payload (Fixes S-H1: off-site redundant replication)
-app.get('/api/backup', (req, res) => {
+// Create & Download Full Backup JSON Payload (Admin Protected)
+app.get('/api/backup', authMiddleware, adminMiddleware, (req, res) => {
   try {
     const backup = db.createBackup();
-    const backupsDir = path.join(__dirname, 'data', 'backups');
-    if (!fs.existsSync(backupsDir)) {
-      fs.mkdirSync(backupsDir, { recursive: true });
-    }
-    const filename = `ordercenter_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    const localPath = path.join(backupsDir, filename);
-    fs.writeFileSync(localPath, JSON.stringify(backup, null, 2), 'utf-8');
-
-    // S-H1 Fix: Redundant off-site replication to secondary folder outside current server workspace
-    try {
-      const offsiteDir = process.env.OFFSITE_BACKUP_DIR || path.join(process.env.USERPROFILE || process.env.HOME || '.', '.ordercenter_offsite_backups');
-      if (!fs.existsSync(offsiteDir)) {
-        fs.mkdirSync(offsiteDir, { recursive: true });
-      }
-      fs.writeFileSync(path.join(offsiteDir, filename), JSON.stringify(backup, null, 2), 'utf-8');
-    } catch (offsiteErr) {
-      console.warn('[Backup] Secondary off-site replication note:', offsiteErr.message);
-    }
-
     res.json({
-      message: 'Backup created successfully and replicated offsite.',
-      filename,
+      message: 'Backup created successfully.',
       backup
     });
   } catch (err) {
@@ -444,8 +425,8 @@ app.get('/api/backup', (req, res) => {
   }
 });
 
-// Direct Download Attachment Endpoint for Browser
-app.get('/api/backup/download', (req, res) => {
+// Direct Download Attachment Endpoint for Browser (Admin Protected)
+app.get('/api/backup/download', authMiddleware, adminMiddleware, (req, res) => {
   try {
     const backup = db.createBackup();
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
@@ -458,17 +439,25 @@ app.get('/api/backup/download', (req, res) => {
   }
 });
 
-// Restore Database from Backup Payload
-app.post('/api/restore', (req, res) => {
+// Restore Database from Backup Payload (Admin Protected)
+app.post('/api/restore', authMiddleware, adminMiddleware, (req, res) => {
   try {
-    const backupData = req.body;
+    let backupData = req.body;
     if (!backupData || typeof backupData !== 'object') {
       return res.status(400).json({ error: 'Invalid backup data provided.' });
+    }
+
+    // Unwrap if wrapped in { backup: ... } or { data: ... }
+    if (backupData.backup && typeof backupData.backup === 'object') {
+      backupData = backupData.backup;
+    } else if (backupData.data && typeof backupData.data === 'object' && !Array.isArray(backupData.data)) {
+      backupData = backupData.data;
     }
 
     db.restoreBackup(backupData);
     res.json({ message: 'System database restored successfully from backup.' });
   } catch (err) {
+    console.error('[API Restore Error]:', err.message);
     res.status(500).json({ error: 'Failed to restore database: ' + err.message });
   }
 });
@@ -476,6 +465,16 @@ app.post('/api/restore', (req, res) => {
 // Fallback to frontend index.html for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Global JSON Error Handler (Guarantees JSON error response instead of HTML)
+app.use((err, req, res, next) => {
+  console.error('[Global Server Error Handler]:', err);
+  if (res.headersSent) return next(err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: err.message || 'An unexpected error occurred on the server.'
+  });
 });
 
 // Start Express Server
